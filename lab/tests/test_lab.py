@@ -75,3 +75,18 @@ class OracleAndDecisionTest(unittest.TestCase):
             self.assertTrue(target[0].alternatives)
             self.assertTrue(target[0].outcome)
             self.assertIsNotNone(r.travel_error)
+
+
+class PairedConditionsTest(unittest.TestCase):
+    def test_weather_identical_when_signals_hidden(self):
+        # One factor only: visibility of signs. Weather truth must not move with player choices.
+        for seed in range(1, 11):
+            on = run("district_v0", "B_readable", "local", 8, seed, signals_visible=True)
+            off = run("district_v0", "B_readable", "local", 8, seed, signals_visible=False)
+            self.assertEqual([(r.storm_start, r.storm_end) for r in on],
+                             [(r.storm_start, r.storm_end) for r in off])
+
+    def test_hidden_signals_produce_no_signal_decisions(self):
+        for seed in range(1, 6):
+            for r in run("district_v0", "B_readable", "local", 8, seed, signals_visible=False):
+                self.assertFalse([d for d in r.decisions if d.point == "сигнал"])

@@ -11,7 +11,7 @@ import random
 from dataclasses import dataclass, field
 
 from .agent import CARRY_CAPACITY, SEARCH_CHUNK_MIN, Agent
-from .world import World
+from .world import DayWeather, World
 
 DEPART_MIN = 60
 INDOOR_LOSS_PER_MIN = 0.3
@@ -49,6 +49,8 @@ class DayRecord:
     after_dark: bool = False
     crisis: bool = False
     min_warmth: float = 100.0
+    storm_start: int | None = None  # weather truth, recorded for experiment checks
+    storm_end: int | None = None
     cold_night: bool = False
     next_intention: str = ""
     decisions: list[Decision] = field(default_factory=list)
@@ -83,9 +85,10 @@ def _predicted_trip(agent: Agent, node: str) -> float:
     return 2 * out_cost + _expected_chunks(agent, node) * SEARCH_CHUNK_MIN
 
 
-def run_day(world: World, agent: Agent, rng: random.Random, day: int, fuel: int) -> tuple[DayRecord, int]:
-    weather = world.roll_weather(rng)
-    rec = DayRecord(day=day, fuel_morning=fuel, margin=agent.margin, signal_trust=agent.beliefs.signal_trust())
+def run_day(world: World, agent: Agent, weather: DayWeather, lrng: random.Random, day: int, fuel: int,
+            signals_visible: bool = True) -> tuple[DayRecord, int]:
+    rec = DayRecord(day=day, fuel_morning=fuel, margin=agent.margin, signal_trust=agent.beliefs.signal_trust(),
+                    storm_start=weather.storm_start, storm_end=weather.storm_end)
 
     if fuel >= world.fuel_per_night + 1:
         rec.decisions.append(Decision(
@@ -138,7 +141,7 @@ def run_day(world: World, agent: Agent, rng: random.Random, day: int, fuel: int)
 
     def check_signal() -> None:
         nonlocal noticed, returning, goal
-        if noticed or weather.signal_at is None or now < weather.signal_at:
+        if not signals_visible or noticed or weather.signal_at is None or now < weather.signal_at:
             return
         noticed = True
         trust = agent.beliefs.signal_trust()
@@ -174,7 +177,7 @@ def run_day(world: World, agent: Agent, rng: random.Random, day: int, fuel: int)
                     break
                 now += SEARCH_CHUNK_MIN
                 warmth -= INDOOR_LOSS_PER_MIN * SEARCH_CHUNK_MIN
-                got = min(world.loot.get(node, 0), rng.randint(1, 2), CARRY_CAPACITY - carried)
+                got = min(world.loot.get(node, 0), lrng.randint(1, 2), CARRY_CAPACITY - carried)
                 world.loot[node] = world.loot.get(node, 0) - got
                 carried += got
                 update = agent.learn_loot(node, got)
@@ -271,13 +274,16 @@ def _night(world: World, rec: DayRecord, fuel: int) -> tuple[DayRecord, int]:
     return rec, fuel
 
 
-def run(world_name: str, variant: str, profile: str, days: int, seed: int) -> list[DayRecord]:
-    rng = random.Random(seed)
+def run(world_name: str, variant: str, profile: str, days: int, seed: int,
+        signals_visible: bool = True) -> list[DayRecord]:
+    """Weather depends only on (seed, day), never on what the player did: conditions stay paired."""
     world = World.load(world_name, variant)
     agent = Agent(profile, world)
+    loot_rng = random.Random(f"{seed}:loot")
     fuel = world.start_fuel
     records = []
     for d in range(1, days + 1):
-        rec, fuel = run_day(world, agent, rng, d, fuel)
+        weather = world.roll_weather(random.Random(f"{seed}:weather:{d}"))
+        rec, fuel = run_day(world, agent, weather, loot_rng, d, fuel, signals_visible)
         records.append(rec)
     return records

@@ -1,0 +1,47 @@
+# Player-experience lab: unit tests and one-factor paired experiments.
+# Results go to the run summary and to the lab-results artifact. Nothing is committed back.
+name: lab
+
+on:
+  push:
+    paths:
+      - "lab/**"
+      - ".github/workflows/lab.yml"
+  workflow_dispatch:
+    inputs:
+      seeds:
+        description: "Paired seeds per experiment"
+        default: "200"
+
+permissions:
+  contents: read
+
+jobs:
+  lab:
+    runs-on: ubuntu-24.04
+    env:
+      SEEDS: ${{ inputs.seeds || '200' }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Unit tests
+        run: python3 -m unittest discover -s lab/tests -t .
+
+      - name: Signs visible vs hidden (same weather, B_readable)
+        run: |
+          mkdir -p lab-results
+          for profile in novice local; do
+            python3 -m lab.experiment --variant B_readable --profile "$profile" \
+              --days 8 --seeds "$SEEDS" --json "lab-results/signs_B_${profile}.json" --md \
+              >> "$GITHUB_STEP_SUMMARY"
+            echo >> "$GITHUB_STEP_SUMMARY"
+          done
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: lab-results
+          path: lab-results/
