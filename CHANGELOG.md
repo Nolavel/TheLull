@@ -9,9 +9,10 @@
 
 ### Added (локальная установка UE 5.8)
 
-- `docs/setup/LOCAL_UE.md`: первая задача локального Claude Code — движок и проект на внешнем диске,
-  локальный DDC (Zen) перенесён туда через `UE-LocalDataCachePath`, проверка, что сегодня коммитить.
-- `.gitignore` для UE; `Content/` исключён до решения по Git LFS.
+- `docs/setup/LOCAL_UE.md` (черновик): первый запуск UE 5.8.4 на ноутбуке — тестовый `UE_Lab` вне репозитория,
+  DDC (Zen) на внешнем диске с учётом приоритета `UE-ZenDataPath`, без автоудаления кэша, настройки под Intel HD 620,
+  подключение Claude Code через Unreal MCP.
+- `.gitignore` для UE; `Content/` исключён: ассеты пока локально с резервной копией, Git LFS не используется.
 - Облачное окружение `ue_claudeflow`: setup-скрипт ставит Blender 5.2.4 LTS.
 
 — Claude, `ue-claudeflow`
