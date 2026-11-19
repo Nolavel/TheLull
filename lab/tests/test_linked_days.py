@@ -84,7 +84,8 @@ class LinkedDayTest(unittest.TestCase):
 
     def test_weather_can_override_the_tomorrow_plan(self):
         cold = paired_plans([-24], fuel=7, daylight_hours=7)
-        # A plan may trigger packing, but night conditions can still force its revision.
+        # When no preparation can save the long trip, the agent should not pack pointlessly.
+        self.assertNotEqual(cold["by_intention"][EXPEDITION.name]["choice"], "D")
         self.assertNotEqual(cold["by_intention"][EXPEDITION.name]["actual_day_plan"], EXPEDITION.name)
 
     def test_cannot_use_negative_stock_or_invalid_wind(self):
