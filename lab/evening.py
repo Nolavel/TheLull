@@ -168,6 +168,17 @@ class EveningBeliefs:
         self.burn_rate_est = 0.5 * old + 0.5 * measured_per_h
         return f"наблюдаемый расход топлива: {old:.2f}→{self.burn_rate_est:.2f} в час"
 
+    def observe_rate_lower_bound(self, minimum_per_h: float) -> str:
+        """Fire was out when checked: only its minimum possible rate is known."""
+        if minimum_per_h <= 0:
+            raise ValueError("rate bound must be positive")
+        old = self.burn_rate_est
+        if old >= minimum_per_h:
+            return "погасший огонь не уточнил оценку расхода"
+        self.burn_rate_est = 0.5 * (old + minimum_per_h)
+        return (f"огонь уже погас: расход не меньше {minimum_per_h:.2f} в час; "
+                f"оценка {old:.2f}→{self.burn_rate_est:.2f}")
+
 
 @dataclass(frozen=True)
 class Tomorrow:
