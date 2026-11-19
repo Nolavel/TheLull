@@ -325,6 +325,10 @@ def choose(body: Body, room: Room, beliefs: EveningBeliefs, tomorrow: Tomorrow,
     """
     opts = options(body, room, beliefs, tomorrow, outside_c, daylight_hours)
     eligible = [o for o in opts if o["available"]]
+    # Packing is available to the player, but a one-day planner does not spend
+    # tonight preparing a journey that its own forecast says cannot happen.
+    eligible = [o for o in eligible if not (o["option"].startswith("D:")
+                and not o["ready_for_tomorrow_expected"])]
     can_keep_plan = any(o["ready_for_tomorrow_expected"] for o in eligible)
     if not eligible:
         return next(o for o in opts if o["option"].startswith("B:")), "работа недоступна", tomorrow
@@ -342,11 +346,7 @@ def choose(body: Body, room: Room, beliefs: EveningBeliefs, tomorrow: Tomorrow,
         # Penalize the lost itinerary only when a viable preparation would preserve it.
         # If the whole night is too cold or exhausting, do not force packing.
         lost_plan = 25.0 if tomorrow.droppable and can_keep_plan and not o["ready_for_tomorrow_expected"] else 0.0
-        # Packing the kit for a departure that still cannot happen is not a free consolation prize.
-        # Its work has no next-day payoff in the single-day forecast.
-        wasted_prep = 8.0 if o["option"].startswith("D:") and not o["ready_for_tomorrow_expected"] else 0.0
-        return (cold + future + unready + strength + 1.5 * o["work_hours_expected"]
-                + materials + lost_plan + wasted_prep)
+        return cold + future + unready + strength + 1.5 * o["work_hours_expected"] + materials + lost_plan
 
     pick = min(eligible, key=lambda o: (opportunity_cost(o), o["work_hours_expected"]))
     after = tomorrow
