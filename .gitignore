@@ -21,3 +21,8 @@ Plugins/**/Intermediate/
 # Local secrets and agent settings
 .env
 .claude/settings.local.json
+
+# Lab run outputs
+lab/**/*.json.out
+__pycache__/
+out*.json
