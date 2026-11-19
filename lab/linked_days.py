@@ -54,11 +54,14 @@ def do_next_day(plan: Tomorrow, body: Body, room: Room, depot: Depot,
     actual = plan
     if body.core_c < HYPOTHERMIC_C or morning > plan.max_morning_fatigue or projected > 90.0:
         if plan is SHORT_WALK or morning + effort(SHORT_WALK, wind) > 90.0 or body.core_c < HYPOTHERMIC_C:
+            room.step(8.0)  # the world clock keeps running if the player stays home
             return DayResult(plan.name, "остался дома", "сам решил восстановиться до выхода",
                              round(projected, 1), round(morning, 1), 0.0, 0, depot.fuel, False)
         actual = SHORT_WALK
 
     cost = effort(actual, wind)
+    # The world continues while the hero travels: the unattended stove burns.
+    room.step(8.0)
     body.fatigue = min(100.0, body.fatigue + cost)
     body.stamina = max(0.0, body.stamina - min(50.0, actual.load * 4.0))
     # No infinite replenishment. A larger excursion has a chance to bring back
