@@ -68,3 +68,46 @@ class LinkedDayTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+class BeliefAndCalibrationTest(unittest.TestCase):
+    def test_profiles_start_with_different_priors_not_different_world(self):
+        plans = [SHORT_WALK]
+        local = run_cycle(plans, [-18], fuel=5, profile="local")
+        novice = run_cycle(plans, [-18], fuel=5, profile="novice")
+        self.assertEqual(local["scenario"]["fuel"], novice["scenario"]["fuel"])
+        self.assertEqual(local["days"][0]["before_evening"]["burn_rate_belief"], 1.0)
+        self.assertEqual(novice["days"][0]["before_evening"]["burn_rate_belief"], 0.65)
+
+    def test_learning_does_not_expose_an_unobserved_expiry(self):
+        r = run_cycle([SHORT_WALK], [-18], fuel=2, profile="novice")
+        d = r["days"][0]
+        if (d["night"]["observed_burn_rate"] is None and
+                d["night"]["burn_rate_lower_bound"] is None):
+            self.assertEqual(d["before_evening"]["burn_rate_belief"],
+                             d["after_day"]["burn_rate_belief"])
+        self.assertIn("core_forecast_error_c", d)
+
+    def test_censored_burn_observation_never_decreases_known_lower_bound(self):
+        b = EveningBeliefs(burn_rate_est=0.4)
+        text = b.observe_rate_lower_bound(0.9)
+        self.assertIn("не меньше", text)
+        self.assertGreater(b.burn_rate_est, 0.4)
+        above = b.burn_rate_est
+        b.observe_rate_lower_bound(0.2)
+        self.assertEqual(b.burn_rate_est, above)
+
+    def test_forecasting_uses_copies_not_the_real_room(self):
+        from lab.evening import EXPEDITION, options
+        room, body, beliefs = Room(fuel=5), Body(), EveningBeliefs()
+        initial = (room.fuel, room.furniture, room.heated_offset_c,
+                   body.fatigue, body.core_c)
+        result = options(body, room, beliefs, EXPEDITION, -18)
+        self.assertEqual(len(result), 3)
+        self.assertEqual(initial, (room.fuel, room.furniture, room.heated_offset_c,
+                                   body.fatigue, body.core_c))
+
+    def test_cold_body_must_warm_up_before_sleep(self):
+        from lab.evening import sleep_refusal
+        room = Room(fuel=8, fire_lit=True, heated_offset_c=12)
+        body = Body(core_c=35.0, fatigue=70.0)
+        self.assertEqual(sleep_refusal(room, body, -18), "сначала нужно согреться")
