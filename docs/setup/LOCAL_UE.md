@@ -118,3 +118,17 @@ HP 15s-du0xxx: **4 ГБ DDR4**, Intel HD 620 (видеопамять из тех
 
 Облачный Claude забирает изменения через `git fetch`, правит и пушит в ту же ветку.
 Перед работой — всегда `git pull`.
+
+## 7. Тест чтения Blueprint (после раздела 6)
+
+Цель: проверить, что облачный Claude восстанавливает логику из `.uasset` без редактора. Источник истины —
+`.uasset` в Unreal; текст и JSON из rust-uasset — только представление для анализа.
+
+1. `Content/Tests/BP_LogicTest` (Actor), переменная `bIsCold` (Boolean).
+2. `BeginPlay → Branch(bIsCold) → True: Print String "Cold" / False: Print String "Warm"`.
+3. Сохранить, commit и push в `ue-claudeflow`. Сделать скриншот графа и передать автору (не коммитить);
+   облачному Claude граф не показывать до его разбора.
+4. Облачный Claude: `uasset Content/Tests/BP_LogicTest.uasset` и `--nodes`.
+
+Успех — восстановлены событие, условие по `bIsCold`, порядок выполнения и оба исхода с их строками.
+Следующий тест — функции, собственные события и обращение к другому объекту.
