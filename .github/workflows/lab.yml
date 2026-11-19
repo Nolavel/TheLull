@@ -57,6 +57,16 @@ jobs:
           for x in result['examples'][:6]:
               print(f"- {x['temp']} °C, дров {x['fuel']}, восстановление {x['recovery']}: {list(x['choices'].values())}")
           print("Это наблюдения модели, не измерение интереса игроков.")
+          from lab.evening import SHORT_WALK, EXPEDITION, UNDECIDED, options, choose
+          from lab.evening_run import fresh
+          for temp, fuel in [(-24, 7), (-18, 5), (-12, 3), (-12, 5), (-6, 3), (-6, 7)]:
+              for plan in (SHORT_WALK, EXPEDITION):
+                  room, body, beliefs = fresh(3.0, fuel)
+                  pick, _, _ = choose(body, room, beliefs, plan, temp)
+                  opts = options(body, room, beliefs, plan, temp)
+                  detail = [(o['option'][:1], o['morning_fatigue_expected'],
+                             o['wake_hours_expected'], o['ready_for_tomorrow_expected']) for o in opts]
+                  print(f"diagnostic temp={temp} fuel={fuel} plan={plan.name}: {pick['option'][:1]} {detail}")
           PY
 
       - uses: actions/upload-artifact@v4
