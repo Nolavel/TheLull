@@ -1,5 +1,6 @@
 # TheLull
-!(Represent.jpg)
+
+![Обложка TheLull](Represent.jpg)
 
 ## Заполниться позже
 
