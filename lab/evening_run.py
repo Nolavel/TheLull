@@ -20,6 +20,12 @@ OUTSIDE_C = -18.0  # Hoarbound's reference exposure figure; placeholder, not The
 
 def play(option_label: str, outside_c: float, room: Room, body: Body, beliefs: EveningBeliefs) -> dict:
     work = {"A": HEAVY, "B": None, "C": SEAL}[option_label[0]]
+    if work is HEAVY and (not room.has_axe or room.furniture <= 0):
+        raise ValueError("нельзя разобрать мебель без топора и доступной мебели")
+    if work is SEAL and room.sealed:
+        raise ValueError("комната уже утеплена")
+    if work is not None and body.stamina < work.stamina_cost:
+        raise ValueError("недостаточно кратковременной выносливости для работы")
     log, hour = [], 0.0
 
     if work is not None:
@@ -37,6 +43,7 @@ def play(option_label: str, outside_c: float, room: Room, body: Body, beliefs: E
             room.furniture = max(0, room.furniture - 1)
         if work is SEAL:
             room.cooling_rate *= SEAL_COOLING_FACTOR
+            room.sealed = True
             gained = f"комната теперь остывает вдвое медленнее ({room.cooling_rate:.1f}°/ч)"
         else:
             gained = f"{work.fuel} топлива"
@@ -76,24 +83,26 @@ def play(option_label: str, outside_c: float, room: Room, body: Body, beliefs: E
                 wakes.append({"at": round(at, 1), "core_c": round(woke_at_c, 1), "did": "разжёг остаток дров"})
                 log.append(f"{at:4.1f} ч: проснулся от холода ({woke_at_c:.1f}°) — разжёг остаток дров")
                 asleep = False
-            elif room.furniture > 0:
+            elif room.furniture > 0 and room.has_axe and body.stamina >= HEAVY.stamina_cost and (
+                night_hours - slept - awake_h >= HEAVY.hours):
                 room.furniture -= 1
+                body.stamina = max(0.0, body.stamina - HEAVY.stamina_cost)
+                # Work progresses on the SAME game clock as fire and temperature.
+                for _ in range(int(round(HEAVY.hours / STEP_H))):
+                    room.step(STEP_H)
+                    step_body(body, room, outside_c, STEP_H, asleep=False, fatigue_per_h=HEAVY.fatigue_per_h)
+                    awake_h += STEP_H
                 room.fuel += HEAVY.fuel
                 room.fire_lit = True
-                body.stamina = max(0.0, body.stamina - HEAVY.stamina_cost)
-                body.fatigue = min(100.0, body.fatigue + HEAVY.fatigue_per_h * HEAVY.hours)
-                step_body(body, room, outside_c, HEAVY.hours, asleep=False, fatigue_per_h=0.0)
-                awake_h += HEAVY.hours
                 wakes.append({"at": round(at, 1), "core_c": round(woke_at_c, 1),
                               "did": "ломал мебель среди ночи"})
                 log.append(f"{at:4.1f} ч: проснулся от холода ({woke_at_c:.1f}°) — "
                            f"ломает мебель в темноте, {HEAVY.hours} ч без сна")
                 continue
             else:
-                wakes.append({"at": round(at, 1), "core_c": round(woke_at_c, 1),
-                              "did": "жечь нечего — сидит до утра"})
-                log.append(f"{at:4.1f} ч: проснулся от холода ({woke_at_c:.1f}°) — жечь нечего, "
-                           f"досиживает ночь без сна")
+                why = "нет доступного топлива или инструмента — сидит до утра"
+                wakes.append({"at": round(at, 1), "core_c": round(woke_at_c, 1), "did": why})
+                log.append(f"{at:4.1f} ч: проснулся от холода ({woke_at_c:.1f}°) — {why}")
                 while slept + awake_h < night_hours:
                     room.step(STEP_H)
                     step_body(body, room, outside_c, STEP_H, asleep=False, fatigue_per_h=IDLE_FATIGUE_PER_H)

@@ -95,7 +95,7 @@ class WakeFromColdTest(unittest.TestCase):
         room, body, beliefs = fresh(COOLING_RATE_C_PER_H, fuel=1)
         room.furniture = 0
         res = play("B: лечь раньше на том, что есть", -18.0, room, body, beliefs)
-        self.assertIn("жечь нечего", " ".join(w["did"] for w in res["wake_events"]))
+        self.assertIn("нет доступного топлива", " ".join(w["did"] for w in res["wake_events"]))
         self.assertGreater(res["morning_fatigue"], 45)  # the night cost strength instead of paying it back
 
     def test_breaking_furniture_uses_it_up(self):
@@ -103,3 +103,45 @@ class WakeFromColdTest(unittest.TestCase):
         before = room.furniture
         play("A: разобрать мебель, топить дольше", -6.0, room, body, beliefs)
         self.assertLess(room.furniture, before)
+
+class ToolAndBeliefTest(unittest.TestCase):
+    def test_no_axe_cannot_convert_furniture_to_fuel(self):
+        room, body, beliefs = fresh(COOLING_RATE_C_PER_H, fuel=1)
+        room.has_axe = False
+        with self.assertRaises(ValueError):
+            play("A: разобрать мебель, топить дольше", -18, room, body, beliefs)
+        play("B: лечь раньше на том, что есть", -18, room, body, beliefs)
+        self.assertEqual(room.furniture, 2)
+
+    def test_sealing_cannot_be_repeated_for_free(self):
+        room, body, beliefs = fresh(COOLING_RATE_C_PER_H, fuel=5)
+        play("C: утеплить комнату и лечь раньше", -6, room, body, beliefs)
+        self.assertTrue(room.sealed)
+        self.assertAlmostEqual(room.cooling_rate, COOLING_RATE_C_PER_H * 0.5)
+        with self.assertRaises(ValueError):
+            play("C: утеплить комнату и лечь раньше", -6, room, body, beliefs)
+
+    def test_unavailable_actions_not_selected(self):
+        from lab.evening import EXPEDITION, choose
+        room, body, beliefs = fresh(COOLING_RATE_C_PER_H, fuel=5)
+        room.has_axe = False
+        room.sealed = True
+        choice, _, _ = choose(body, room, beliefs, EXPEDITION, -18)
+        self.assertTrue(choice["option"].startswith("B:"))
+
+    def test_burn_rate_learning_is_bidirectional(self):
+        from lab.evening import EveningBeliefs
+        b = EveningBeliefs()
+        b.observe_burn_rate(1.6)
+        self.assertGreater(b.burn_rate_est, 1.0)
+        b.observe_burn_rate(0.5)
+        self.assertLess(b.burn_rate_est, 1.3)
+        with self.assertRaises(ValueError):
+            b.observe_burn_rate(0.0)
+
+    def test_incomplete_fuel_step_not_full_hour_of_heating(self):
+        room = Room(fuel=0.1, fire_lit=True, heated_offset_c=0.0)
+        room.step(1.0)
+        self.assertFalse(room.fire_lit)
+        self.assertAlmostEqual(room.fuel, 0.0)
+        self.assertLess(room.heated_offset_c, 1.0)

@@ -88,6 +88,8 @@ class Room:
     fire_lit: bool = False
     cooling_rate: float = COOLING_RATE_C_PER_H
     furniture: int = 2  # pieces left that could still be broken up for fuel
+    has_axe: bool = True  # chopping is not available without the tool
+    sealed: bool = False  # insulation is a persistent one-time repair
 
     def felt_c(self, outside_c: float) -> float:
         # Indoors the wind-chill term is gone entirely (Hoarbound §4). What is left: the structure's passive
@@ -97,10 +99,15 @@ class Room:
 
     def step(self, hours: float) -> None:
         if self.fire_lit and self.fuel > 0:
-            self.fuel -= FUEL_BURN_PER_H * hours
-            self.heated_offset_c = min(MAX_HEATED_OFFSET_C, self.heated_offset_c + HEATING_RATE_C_PER_H * hours)
+            burned_h = min(hours, self.fuel / FUEL_BURN_PER_H)
+            self.fuel = max(0.0, self.fuel - FUEL_BURN_PER_H * burned_h)
+            self.heated_offset_c = min(MAX_HEATED_OFFSET_C, self.heated_offset_c + HEATING_RATE_C_PER_H * burned_h)
             if self.fuel <= 0:
-                self.fuel, self.fire_lit = 0, False
+                self.fire_lit = False
+            # Even a partial step after the last ember counts as cooling.
+            remaining_h = hours - burned_h
+            if remaining_h > 0:
+                self.heated_offset_c = max(0.0, self.heated_offset_c - self.cooling_rate * remaining_h)
         else:
             self.heated_offset_c = max(0.0, self.heated_offset_c - self.cooling_rate * hours)
 
@@ -151,6 +158,14 @@ class EveningBeliefs:
     def expected_work_hours(self, work: Work) -> float:
         return self.work_hours_est.get(work.name, work.hours)
 
+    def observe_burn_rate(self, measured_per_h: float) -> str:
+        """Update in either direction ONLY after an observable, timed fuel reading."""
+        if measured_per_h <= 0:
+            raise ValueError("observed burn rate must be positive")
+        old = self.burn_rate_est
+        self.burn_rate_est = 0.5 * old + 0.5 * measured_per_h
+        return f"наблюдаемый расход топлива: {old:.2f}→{self.burn_rate_est:.2f} в час"
+
 
 @dataclass(frozen=True)
 class Tomorrow:
@@ -178,6 +193,11 @@ def _forecast(opt: EveningOption, body: Body, room: Room, beliefs: EveningBelief
               tomorrow: Tomorrow, outside_c: float) -> dict:
     """What the player *expects*, from its own beliefs. It never reads the night's real outcome."""
     work = opt.work
+    available = (work is None or (
+        body.stamina >= work.stamina_cost
+        and (work is not HEAVY or (room.has_axe and room.furniture > 0))
+        and (work is not SEAL or not room.sealed)
+    ))
     work_h = beliefs.expected_work_hours(work) if work else 0.0
     fuel_after = room.fuel + (work.fuel if work else 0)
     night_h = HOURS_OF_NIGHT - work_h
@@ -194,17 +214,26 @@ def _forecast(opt: EveningOption, body: Body, room: Room, beliefs: EveningBelief
     fatigue_after_work = body.fatigue + (work.fatigue_per_h * work_h if work else 0.0)
     # Waking up cold ends the night's sleep; what is left is spent awake, not resting.
     slept_h = night_h - cold_h if expects_to_wake else night_h
-    morning_fatigue = max(0.0, fatigue_after_work - beliefs.recovery_est * slept_h)
+    morning_fatigue = max(0.0, fatigue_after_work - beliefs.recovery_est * slept_h
+                          + (2.0 * cold_h if expects_to_wake else 0.0))
+    # Simplified next-day effort (NOT simulated walking yet).
+    # Both the chosen plan and the load affect the predicted reserve.
+    day_effort = tomorrow.hours_out * (3.0 + 0.9 * tomorrow.load)
+    projected_fatigue_after_trip = morning_fatigue + day_effort
     return {
         "option": opt.label,
+        "available": available,
         "work_hours_expected": round(work_h, 2),
         "fuel_after": fuel_after,
         "fire_hours_expected": round(fire_h, 1),
         "night_hours": round(night_h, 1),
         "cold_hours_expected": round(cold_h, 1),
         "expects_to_wake_cold": expects_to_wake,
-        "morning_fatigue_expected": round(morning_fatigue),
-        "ready_for_tomorrow_expected": morning_fatigue <= tomorrow.max_morning_fatigue,
+        "morning_fatigue_expected": round(morning_fatigue, 1),
+        "day_effort_expected": round(day_effort, 1),
+        "fatigue_after_trip_expected": round(projected_fatigue_after_trip, 1),
+        "ready_for_tomorrow_expected": (morning_fatigue <= tomorrow.max_morning_fatigue
+                                       and projected_fatigue_after_trip <= 90.0),
         "stamina_cost": work.stamina_cost if work else 0.0,
         "basis": opt.reason,
     }
@@ -223,30 +252,34 @@ def options(body: Body, room: Room, beliefs: EveningBeliefs, tomorrow: Tomorrow,
 
 def choose(body: Body, room: Room, beliefs: EveningBeliefs, tomorrow: Tomorrow,
            outside_c: float) -> tuple[dict, str, Tomorrow]:
-    """Weigh tonight against tomorrow. May give up the plan instead of overworking for it.
+    """Weigh predicted night's disruption and next day's load. No true-night oracle.
 
-    Nothing here maps a plan to an option: the plan only sets how much rest the player thinks it needs.
+    Plans change the *cost* of fatigue, not a lookup table from plan to A/B/C.
+    Decisions are research heuristics, not a proven human policy.
     """
     opts = options(body, room, beliefs, tomorrow, outside_c)
-    affordable = [o for o in opts if o["stamina_cost"] <= body.stamina]
-    if not affordable:
-        return opts[1], "сил на работу не осталось", tomorrow
+    eligible = [o for o in opts if o["available"]]
+    if not eligible:
+        return next(o for o in opts if o["option"].startswith("B:")), "работа недоступна", tomorrow
 
-    # A night it expects to spend chilled is not a plan it would accept while another exists.
-    warm = [o for o in affordable if not o["expects_to_wake_cold"]]
-    pool = warm or affordable
-    ready = [o for o in pool if o["ready_for_tomorrow_expected"]]
-    if ready:
-        pick = min(ready, key=lambda o: (o["work_hours_expected"], o["cold_hours_expected"]))
-        return pick, f"рассчитывает выспаться и успеть на «{tomorrow.name}» с меньшей работой", tomorrow
+    def opportunity_cost(o: dict) -> float:
+        # Waking cold is disruptive, even if later intervention averts a bad morning.
+        cold = o["cold_hours_expected"] * 12.0 + (5.0 if o["expects_to_wake_cold"] else 0.0)
+        # Fatigue is more expensive before a demanding day; short tasks tolerate it.
+        future = max(0.0, o["fatigue_after_trip_expected"] - 80.0) * 1.7
+        unready = max(0.0, o["morning_fatigue_expected"] - tomorrow.max_morning_fatigue) * 1.0
+        strength = o["morning_fatigue_expected"] * (0.12 + tomorrow.hours_out * 0.07)
+        # Time and finite materials have an opportunity cost even when the night stays warm.
+        materials = 2.5 if o["option"].startswith("A:") else (1.5 if o["option"].startswith("C:") else 0.0)
+        return cold + future + unready + strength + 1.5 * o["work_hours_expected"] + materials
 
-    if tomorrow.droppable:
-        # Give up the plan rather than wreck tonight for it: the morning decides, not the game.
-        relaxed = replace(tomorrow, name=f"{SHORT_WALK.name} вместо «{tomorrow.name}»",
-                          hours_out=SHORT_WALK.hours_out, load=SHORT_WALK.load,
-                          max_morning_fatigue=SHORT_WALK.max_morning_fatigue, droppable=False)
-        pick = min(pool, key=lambda o: (o["cold_hours_expected"], o["work_hours_expected"]))
-        return pick, f"не верит, что восстановится к «{tomorrow.name}» — откладывает её", relaxed
-
-    pick = min(pool, key=lambda o: (o["cold_hours_expected"], o["morning_fatigue_expected"]))
-    return pick, "ни один вариант не даёт выспаться — выбирает наименее холодную ночь", tomorrow
+    pick = min(eligible, key=lambda o: (opportunity_cost(o), o["work_hours_expected"]))
+    after = tomorrow
+    if tomorrow.droppable and not pick["ready_for_tomorrow_expected"]:
+        after = replace(tomorrow, name=f"{SHORT_WALK.name} вместо «{tomorrow.name}»",
+                        hours_out=SHORT_WALK.hours_out, load=SHORT_WALK.load,
+                        max_morning_fatigue=SHORT_WALK.max_morning_fatigue, droppable=False)
+    reason = (f"сравнил ожидаемый холод, работу и запас сил на «{tomorrow.name}»; "
+              f"выбрал минимальную цену {opportunity_cost(pick):.1f}"
+              + ("; отложил дальний план" if after is not tomorrow else ""))
+    return pick, reason, after
