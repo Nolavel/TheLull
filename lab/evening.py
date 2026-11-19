@@ -247,8 +247,6 @@ def _forecast(opt: EveningOption, body: Body, room: Room, beliefs: EveningBelief
             "core_at_morning_if_uninterrupted": None,
             "expects_to_wake_cold": None, "morning_fatigue_expected": None,
             "day_effort_expected": round(day_effort, 1),
-        "morning_prep_hours_expected": round(prep_h, 2),
-        "daylight_overrun_expected": round(daylight_overrun, 2),
             "morning_prep_hours_expected": round(prep_h, 2),
             "daylight_overrun_expected": round(daylight_overrun, 2),
             "fatigue_after_trip_expected": None,
@@ -297,6 +295,8 @@ def _forecast(opt: EveningOption, body: Body, room: Room, beliefs: EveningBelief
         "expects_to_wake_cold": predicted["woke_cold"] > 0,
         "morning_fatigue_expected": morning_fatigue,
         "day_effort_expected": round(day_effort, 1),
+        "morning_prep_hours_expected": round(prep_h, 2),
+        "daylight_overrun_expected": round(daylight_overrun, 2),
         "fatigue_after_trip_expected": round(projected_fatigue_after_trip, 1),
         "ready_for_tomorrow_expected": morning_fit and daylight_overrun <= 1e-9,
         "stamina_cost": work.stamina_cost if work else 0.0,
@@ -312,7 +312,7 @@ OPTIONS = (EveningOption("A: разобрать мебель, топить до�
 
 def options(body: Body, room: Room, beliefs: EveningBeliefs, tomorrow: Tomorrow,
             outside_c: float, daylight_hours: float = DAYLIGHT_H) -> list[dict]:
-    """Three options, each with the player's own expectation of how it ends. None is scored as correct."""
+    """Four options with predictions based on the player's knowledge, not a prescribed choice."""
     return [_forecast(o, body, room, beliefs, tomorrow, outside_c, daylight_hours) for o in OPTIONS]
 
 
@@ -320,7 +320,7 @@ def choose(body: Body, room: Room, beliefs: EveningBeliefs, tomorrow: Tomorrow,
            outside_c: float, daylight_hours: float = DAYLIGHT_H) -> tuple[dict, str, Tomorrow]:
     """Weigh predicted night's disruption and next day's load. No true-night oracle.
 
-    Plans change the *cost* of fatigue, not a lookup table from plan to A/B/C.
+    Plans change the cost of fatigue and daylight; there is no plan-to-option lookup.
     Decisions are research heuristics, not a proven human policy.
     """
     opts = options(body, room, beliefs, tomorrow, outside_c, daylight_hours)
