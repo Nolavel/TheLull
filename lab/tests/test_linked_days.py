@@ -49,7 +49,7 @@ class LinkedDayTest(unittest.TestCase):
         r = paired_plans([-12], fuel=5, wind=0.5)
         self.assertEqual(len(r["by_intention"]), 3)
         self.assertEqual(r["scenario"]["fuel"], 5)
-        self.assertTrue(all(v["choice"] in ("A", "B", "C") for v in r["by_intention"].values()))
+        self.assertTrue(all(v["choice"] in ("A", "B", "C", "D") for v in r["by_intention"].values()))
         self.assertGreater(r["by_intention"][EXPEDITION.name]["expected_day_fatigue"],
                            r["by_intention"][SHORT_WALK.name]["expected_morning_fatigue"])
 
@@ -59,11 +59,40 @@ class LinkedDayTest(unittest.TestCase):
         self.assertGreaterEqual(r["different_plan_changes_evening"], 0)
         self.assertLessEqual(r["different_plan_changes_evening"], 45)
 
+    def test_itinerary_changes_the_evening_only_when_departure_time_matters(self):
+        tight = paired_plans([-6], fuel=3, daylight_hours=7.0)
+        short = tight["by_intention"][SHORT_WALK.name]
+        long = tight["by_intention"][EXPEDITION.name]
+        self.assertEqual(short["choice"], "B")
+        self.assertEqual(long["choice"], "D")
+        self.assertEqual(long["actual_day_plan"], EXPEDITION.name)
+        self.assertEqual(tight["distinct_evening_choices"], 2)
+        plenty = paired_plans([-6], fuel=3, daylight_hours=10.0)
+        self.assertEqual(plenty["distinct_evening_choices"], 1)
+        self.assertEqual(plenty["by_intention"][EXPEDITION.name]["choice"], "B")
+
+    def test_packing_is_a_real_one_use_time_tradeoff(self):
+        packed = Body(fatigue=0.0, packed=True)
+        prepared = do_next_day(EXPEDITION, packed, Room(fuel=0), Depot(fuel=5), daylight_hours=7)
+        self.assertEqual(prepared.actual, EXPEDITION.name)
+        self.assertEqual(prepared.prep_hours, 0.0)
+        self.assertFalse(packed.packed)
+        unpacked = do_next_day(EXPEDITION, Body(fatigue=0.0), Room(fuel=0),
+                               Depot(fuel=5), daylight_hours=7)
+        self.assertEqual(unpacked.actual, SHORT_WALK.name)
+        self.assertGreater(unpacked.prep_hours, 0.0)
+
+    def test_weather_can_override_the_tomorrow_plan(self):
+        cold = paired_plans([-24], fuel=7, daylight_hours=7)
+        self.assertNotEqual(cold["by_intention"][EXPEDITION.name]["choice"], "D")
+
     def test_cannot_use_negative_stock_or_invalid_wind(self):
         with self.assertRaises(ValueError):
             run_cycle([SHORT_WALK], depot_fuel=-1)
         with self.assertRaises(ValueError):
             do_next_day(SHORT_WALK, Body(), Room(), Depot(), wind=2.0)
+        with self.assertRaises(ValueError):
+            run_cycle([SHORT_WALK], daylight_hours=0)
 
 
 if __name__ == "__main__":
@@ -100,11 +129,11 @@ class BeliefAndCalibrationTest(unittest.TestCase):
         from lab.evening import EXPEDITION, options
         room, body, beliefs = Room(fuel=5), Body(), EveningBeliefs()
         initial = (room.fuel, room.furniture, room.heated_offset_c,
-                   body.fatigue, body.core_c)
+                   body.fatigue, body.core_c, body.packed)
         result = options(body, room, beliefs, EXPEDITION, -18)
-        self.assertEqual(len(result), 3)
+        self.assertEqual(len(result), 4)
         self.assertEqual(initial, (room.fuel, room.furniture, room.heated_offset_c,
-                                   body.fatigue, body.core_c))
+                                   body.fatigue, body.core_c, body.packed))
 
     def test_cold_body_must_warm_up_before_sleep(self):
         from lab.evening import sleep_refusal

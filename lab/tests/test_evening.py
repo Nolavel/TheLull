@@ -130,7 +130,15 @@ class ToolAndBeliefTest(unittest.TestCase):
         room.has_axe = False
         room.sealed = True
         choice, _, _ = choose(body, room, beliefs, EXPEDITION, -18)
-        self.assertTrue(choice["option"].startswith("B:"))
+        self.assertIn(choice["option"][:1], ("B", "D"))
+        self.assertFalse(choice["option"].startswith(("A:", "C:")))
+
+    def test_cannot_prepare_an_already_packed_kit_twice(self):
+        room, body, beliefs = fresh(COOLING_RATE_C_PER_H, fuel=5)
+        play("D: подготовить вещи и маршрут к утру", -6, room, body, beliefs)
+        self.assertTrue(body.packed)
+        with self.assertRaises(ValueError):
+            play("D: подготовить вещи и маршрут к утру", -6, room, body, beliefs)
 
     def test_burn_rate_learning_is_bidirectional(self):
         from lab.evening import EveningBeliefs

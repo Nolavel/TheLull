@@ -246,16 +246,19 @@ def plans(outside_c: float, cooling: float, fuel: int, recovery: float = RECOVER
         pick, why, after = choose(body, room, beliefs, tomorrow, outside_c)
         result = play(pick["option"], outside_c, room, body, beliefs)
         dropped = after.name != tomorrow.name
-        went = result["morning_fatigue"] <= after.max_morning_fatigue
+        # This command models only the night. Actual departure is in lab.linked_days.
+        went = (result["morning_fatigue"] <= after.max_morning_fatigue
+                and result["morning_core_c"] >= HYPOTHERMIC_C
+                and result["morning_fatigue"] + pick["day_effort_expected"] <= 90.0
+                and pick["daylight_overrun_expected"] <= 1e-9)
         out.append({"tomorrow": tomorrow.name, "considered": considered, "chose": pick["option"],
                     "why": why, "gave_up_the_plan_in_the_evening": dropped,
                     "plan_after_evening": after.name,
                     "morning_fatigue": result["morning_fatigue"],
                     "morning_core_c": result["morning_core_c"],
-                    "went_in_the_morning": went,
-                    "morning_note": ("вышел по плану" if went else
-                                     f"утром отказался: усталость {result['morning_fatigue']} "
-                                     f"выше предела {after.max_morning_fatigue:.0f}"),
+                    "could_leave_in_the_morning": went,
+                    "morning_note": ("план выглядит выполнимым (прогноз, не реальный выход)" if went else
+                                     "план не проходит ограничения по усталости, теплу или свету"),
                     "log": result["log"]})
     distinct = {r["chose"] for r in out}
     return {"scenario": {"outside_c": outside_c, "cooling_rate_c_per_h": cooling, "start_fuel": fuel,

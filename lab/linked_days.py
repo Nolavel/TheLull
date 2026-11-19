@@ -179,10 +179,13 @@ def paired_plans(temperatures: list[float] | None = None, fuel: int = 5,
         results[plan.name] = {
             "choice": d["choice"][:1],
             "expected_morning_fatigue": d["forecast"]["morning_fatigue_expected"],
+            "morning_prep_hours_expected": d["forecast"]["morning_prep_hours_expected"],
+            "daylight_overrun_expected": d["forecast"]["daylight_overrun_expected"],
             "expected_day_fatigue": d["forecast"]["fatigue_after_trip_expected"],
             "actual_morning_fatigue": d["night"]["morning_fatigue"],
             "actual_day_fatigue": d["daytime"]["actual_fatigue_after"],
             "actual_day_plan": d["daytime"]["actual"],
+            "actual_day_prep_hours": d["daytime"]["prep_hours"],
             "reason": d["why"],
         }
     distinct = len({x["choice"] for x in results.values()})
@@ -214,6 +217,7 @@ def sweep_plans(daylight_hours: float = DAYLIGHT_H) -> dict:
 def to_markdown(result: dict) -> str:
     s = result["summary"]
     lines = ["### Связанный опыт: вечер → ночь → следующий день", "",
+             f"Доступное дневное окно: {result['scenario']['daylight_hours']} ч.", "",
              f"Вечерние решения: {', '.join(s['evening_choices'])}; "
              f"изменил дневной план {s['plans_changed']} раз; "
              f"просыпался от холода {s['cold_wakes']} раз.", "",
