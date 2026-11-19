@@ -45,7 +45,17 @@ jobs:
         run: |
           python3 -m lab.linked_days --days 3 --fuel 5 --stock 8 --json lab-results/linked_days.json --md >> "$GITHUB_STEP_SUMMARY"
           echo >> "$GITHUB_STEP_SUMMARY"
+          python3 -m lab.linked_days --days 3 --profile novice --fuel 5 --stock 8 --json lab-results/linked_novice.json --md >> "$GITHUB_STEP_SUMMARY"
+          echo >> "$GITHUB_STEP_SUMMARY"
+          python3 -m lab.linked_days --paired --fuel 5 --temp -12 --json lab-results/linked_paired.json >> /dev/null
           python3 -m lab.linked_days --sweep --json lab-results/linked_sweep.json >> /dev/null
+          python3 - <<'PY' >> "$GITHUB_STEP_SUMMARY"
+          import json
+          from pathlib import Path
+          result = json.loads(Path("lab-results/linked_sweep.json").read_text(encoding="utf-8"))
+          print(f"**План изменил вечер:** {result['different_plan_changes_evening']} / {result['cells']} клеток.")
+          print("Это наблюдения модели, не измерение интереса игроков.")
+          PY
 
       - uses: actions/upload-artifact@v4
         with:
