@@ -7,6 +7,15 @@
 
 ## Unreleased
 
+### Added (промпт для локального Claude Code)
+
+- `docs/setup/LOCAL_PROMPT.md`: задание на первый запуск UE 5.8.4 — Launcher, движок на внешний HDD,
+  DDC на внутреннем диске **с лимитом размера и правилом остановки** (на `C:` около 20 ГБ), выключение
+  Lumen, Nanite, тесселяции, Virtual Shadow Maps, Virtual Textures, ray tracing и TSR, Unreal MCP,
+  проект TheLull и `BP_LogicTest`.
+
+— Claude, `ue-claudeflow`
+
 ### Changed (ночь будит, а не убивает; выбор проверяется на пригодность)
 
 - Решение автора: при переохлаждении во сне персонаж просыпается. Варианты ответа — разжечь остаток дров,
