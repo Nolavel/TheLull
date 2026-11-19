@@ -7,6 +7,14 @@
 
 ## Unreleased
 
+### Added (чтение Blueprint в облаке)
+
+- rust-uasset (`tera8m4/rust-uasset`, MIT-0, коммит `54f14ac`) в setup-скрипте облачного окружения: облачные агенты
+  читают Blueprint из `.uasset` как псевдокод без движка. Проверено: сборка и тесты, виджет из UE 5.8.2.
+  Не проверено: граф геймплейного Blueprint 5.8 — первый тест на Blueprint из TheLull.
+
+— Claude, `ue-claudeflow`
+
 ### Decision (хранение проекта)
 
 - `H:\TheLull` (внешний HDD) — рабочий проект и клон репозитория; GitHub — код, конфиги, Blueprints, карты и
