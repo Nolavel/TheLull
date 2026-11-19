@@ -7,6 +7,15 @@
 
 ## Unreleased
 
+### Added (локальная установка UE 5.8)
+
+- `docs/setup/LOCAL_UE.md`: первая задача локального Claude Code — движок и проект на внешнем диске,
+  локальный DDC (Zen) перенесён туда через `UE-LocalDataCachePath`, проверка, что сегодня коммитить.
+- `.gitignore` для UE; `Content/` исключён до решения по Git LFS.
+- Облачное окружение `ue_claudeflow`: setup-скрипт ставит Blender 5.2.4 LTS.
+
+— Claude, `ue-claudeflow`
+
 ### Changed (роль Codex)
 
 - `CODEX.md`: закреплены роли геймдизайнера-практика, независимого критика, UX/QA-ревьюера и инженера реализации.

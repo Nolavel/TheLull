@@ -1,0 +1,26 @@
+# Unreal Engine — generated
+Binaries/
+DerivedDataCache/
+Intermediate/
+Saved/
+Build/*/
+!Build/*.ini
+.vs/
+.idea/
+*.sln
+*.VC.db
+*.opensdf
+*.sdf
+*.suo
+*.xcworkspace
+
+# Plugins build output
+Plugins/**/Binaries/
+Plugins/**/Intermediate/
+
+# Content: binary assets wait for an LFS decision (see docs/setup/LOCAL_UE.md)
+Content/
+
+# Local secrets and agent settings
+.env
+.claude/settings.local.json
