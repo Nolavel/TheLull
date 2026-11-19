@@ -11,8 +11,9 @@ import json
 from dataclasses import asdict, dataclass
 from pathlib import Path
 
-from .evening import (COOLING_RATE_C_PER_H, EXPEDITION, HYPOTHERMIC_C,
-                      SHORT_WALK, UNDECIDED, Body, EveningBeliefs, Room, Tomorrow, choose)
+from .evening import (COOLING_RATE_C_PER_H, DAYLIGHT_H, EXPEDITION, HYPOTHERMIC_C,
+                      SHORT_WALK, UNDECIDED, Body, EveningBeliefs, Room, Tomorrow, choose,
+                      morning_prep_hours)
 from .evening_run import fresh, play
 
 
@@ -39,6 +40,7 @@ class DayResult:
     fuel_collected: int
     depot_left: int
     attempted: bool
+    prep_hours: float = 0.0
 
 
 def effort(plan: Tomorrow, wind: float = 0.5) -> float:
@@ -47,25 +49,31 @@ def effort(plan: Tomorrow, wind: float = 0.5) -> float:
 
 
 def do_next_day(plan: Tomorrow, body: Body, room: Room, depot: Depot,
-                wind: float = 0.5) -> DayResult:
+                wind: float = 0.5, daylight_hours: float = DAYLIGHT_H) -> DayResult:
     """Agent can voluntarily shorten or cancel when it thinks the trip is unaffordable.
 
     This intentionally does not invent a full spatial/weather/day-body simulation;
     travel effort is an explicit, inspectable abstraction.
     """
-    if not 0.0 <= wind <= 1.0:
-        raise ValueError("wind must be between 0 and 1")
+    if not 0.0 <= wind <= 1.0 or daylight_hours <= 0:
+        raise ValueError("invalid wind or daylight window")
     morning = body.fatigue
-    projected = morning + effort(plan, wind)
+    plan_prep = 0.0 if body.packed else morning_prep_hours(plan)
+    projected = morning + effort(plan, wind) + plan_prep * 1.5
     actual = plan
-    if body.core_c < HYPOTHERMIC_C or morning > plan.max_morning_fatigue or projected > 90.0:
-        if plan is SHORT_WALK or morning + effort(SHORT_WALK, wind) > 90.0 or body.core_c < HYPOTHERMIC_C:
+    if (body.core_c < HYPOTHERMIC_C or morning > plan.max_morning_fatigue
+            or projected > 90.0 or plan.hours_out + plan_prep > daylight_hours):
+        short_prep = 0.0 if body.packed else morning_prep_hours(SHORT_WALK)
+        if (plan is SHORT_WALK or morning + effort(SHORT_WALK, wind) + short_prep * 1.5 > 90.0
+                or SHORT_WALK.hours_out + short_prep > daylight_hours or body.core_c < HYPOTHERMIC_C):
             room.step(8.0)  # the world clock keeps running if the player stays home
             return DayResult(plan.name, "остался дома", "сам решил восстановиться до выхода",
                              round(projected, 1), round(morning, 1), 0.0, 0, depot.fuel, False)
         actual = SHORT_WALK
 
-    cost = effort(actual, wind)
+    actual_prep = 0.0 if body.packed else morning_prep_hours(actual)
+    cost = effort(actual, wind) + actual_prep * 1.5
+    body.packed = False  # departure consumes the preparation, not a reusable free buff
     # The world continues while the hero travels: the unattended stove burns.
     room.step(8.0)
     body.fatigue = min(100.0, body.fatigue + cost)
@@ -79,17 +87,18 @@ def do_next_day(plan: Tomorrow, body: Body, room: Room, depot: Depot,
     decision = ("вышел по плану" if actual is plan else
                 "отложил дальнюю вылазку и выбрал короткую")
     return DayResult(plan.name, actual.name, decision, round(projected, 1),
-                     round(body.fatigue, 1), round(actual.hours_out, 1),
-                     found, depot.fuel, True)
+                     round(body.fatigue, 1), round(actual.hours_out + actual_prep, 1),
+                     found, depot.fuel, True, round(actual_prep, 2))
 
 
 def run_cycle(plans: list[Tomorrow], temperatures: list[float] | None = None,
               fuel: int = 5, depot_fuel: int = 10, recovery_per_h: float = 6.0,
               cooling: float = COOLING_RATE_C_PER_H, wind: float = 0.5,
-              axe: bool = True, profile: str = "local") -> dict:
+              axe: bool = True, profile: str = "local",
+              daylight_hours: float = DAYLIGHT_H) -> dict:
     if profile not in PROFILE_BELIEFS:
         raise ValueError("unknown experience profile")
-    if fuel < 0 or depot_fuel < 0 or recovery_per_h <= 0 or not plans:
+    if fuel < 0 or depot_fuel < 0 or recovery_per_h <= 0 or daylight_hours <= 0 or not plans:
         raise ValueError("invalid starting state or empty plan sequence")
     temperatures = temperatures or [-18.0] * len(plans)
     if len(temperatures) != len(plans):
@@ -103,8 +112,9 @@ def run_cycle(plans: list[Tomorrow], temperatures: list[float] | None = None,
     for day, (plan, outside_c) in enumerate(zip(plans, temperatures), start=1):
         start = {"fuel": round(room.fuel, 2), "furniture": room.furniture, "sealed": room.sealed,
                  "fatigue": round(body.fatigue, 1), "core_c": round(body.core_c, 1),
+                 "packed": body.packed,
                  "burn_rate_belief": round(beliefs.burn_rate_est, 3)}
-        pick, reason, revised_plan = choose(body, room, beliefs, plan, outside_c)
+        pick, reason, revised_plan = choose(body, room, beliefs, plan, outside_c, daylight_hours)
         night = play(pick["option"], outside_c, room, body, beliefs)
         # No learning from inaccessible truth (e.g. the exact moment a fire
         # expired while asleep). An unobserved outcome cannot update beliefs.
@@ -114,7 +124,7 @@ def run_cycle(plans: list[Tomorrow], temperatures: list[float] | None = None,
             lesson = beliefs.observe_burn_rate(observed)
         elif night.get("burn_rate_lower_bound") is not None:
             lesson = beliefs.observe_rate_lower_bound(night["burn_rate_lower_bound"])
-        next_day = do_next_day(revised_plan, body, room, depot, wind)
+        next_day = do_next_day(revised_plan, body, room, depot, wind, daylight_hours)
         records.append({
             "day": day, "outside_c": outside_c, "intention": plan.name,
             "before_evening": start, "choice": pick["option"], "why": reason,
@@ -125,13 +135,14 @@ def run_cycle(plans: list[Tomorrow], temperatures: list[float] | None = None,
             "daytime": asdict(next_day), "lesson": lesson,
             "after_day": {"fuel": round(room.fuel, 2), "furniture": room.furniture,
                           "sealed": room.sealed, "fatigue": round(body.fatigue, 1),
-                          "core_c": round(body.core_c, 1),
+                          "core_c": round(body.core_c, 1), "packed": body.packed,
                           "burn_rate_belief": round(beliefs.burn_rate_est, 3)},
         })
     return {
         "scenario": {"plans": [p.name for p in plans], "temperatures": temperatures,
                      "fuel": fuel, "depot_fuel": depot_fuel, "recovery_per_h": recovery_per_h,
-                     "cooling": cooling, "wind": wind, "axe": axe, "profile": profile},
+                     "cooling": cooling, "wind": wind, "axe": axe, "profile": profile,
+                     "daylight_hours": daylight_hours},
         "days": records,
         "summary": {"evening_choices": [d["choice"][:1] for d in records],
                     "trips_completed": sum(d["daytime"]["attempted"] for d in records),
@@ -148,6 +159,7 @@ def run_cycle(plans: list[Tomorrow], temperatures: list[float] | None = None,
             "Travel effort is a placeholder: not a city map, gear model or outdoor thermal simulation.",
             "Predictions depend on the agent's beliefs, not hindsight; outcomes are not emotions.",
             "Room preparation, resources and fatigue persist; no daily magic fuel or fatigue reset.",
+            "Departure prep and daylight hours are experimental time costs, not TheLull balance.",
             "Weather is fixed per scenario and wind is an explicit controlled parameter.",
             "A/B/C choice policy is a research heuristic; its scores are not human preference data.",
         ],
@@ -156,13 +168,13 @@ def run_cycle(plans: list[Tomorrow], temperatures: list[float] | None = None,
 
 def paired_plans(temperatures: list[float] | None = None, fuel: int = 5,
                  recovery: float = 6.0, cooling: float = COOLING_RATE_C_PER_H,
-                 wind: float = 0.5) -> dict:
+                 wind: float = 0.5, daylight_hours: float = DAYLIGHT_H) -> dict:
     """Counterfactual: same home, fuel, temperature, wind; only intent differs."""
     temp = temperatures[0] if temperatures else -18.0
     results = {}
     for plan in (SHORT_WALK, EXPEDITION, UNDECIDED):
         outcome = run_cycle([plan], [temp], fuel=fuel, recovery_per_h=recovery,
-                            cooling=cooling, wind=wind)
+                            cooling=cooling, wind=wind, daylight_hours=daylight_hours)
         d = outcome["days"][0]
         results[plan.name] = {
             "choice": d["choice"][:1],
@@ -175,24 +187,26 @@ def paired_plans(temperatures: list[float] | None = None, fuel: int = 5,
         }
     distinct = len({x["choice"] for x in results.values()})
     return {"scenario": {"outside_c": temp, "fuel": fuel, "recovery": recovery,
-                         "cooling": cooling, "wind": wind},
+                         "cooling": cooling, "wind": wind, "daylight_hours": daylight_hours},
             "by_intention": results, "distinct_evening_choices": distinct,
             "reading": ("разные планы изменили вечернюю подготовку" if distinct > 1 else
                         "вечер одинаков — в этих условиях намерение пока не меняет решение")}
 
 
-def sweep_plans() -> dict:
+def sweep_plans(daylight_hours: float = DAYLIGHT_H) -> dict:
     """Scan rather than cherry-pick cases where a future plan changes the evening."""
     cells = []
     for temp in (-24.0, -18.0, -12.0, -6.0, -2.0):
         for fuel in (3, 5, 7):
             for recovery in (3.0, 6.0, 9.0):
-                row = paired_plans([temp], fuel=fuel, recovery=recovery)
+                row = paired_plans([temp], fuel=fuel, recovery=recovery,
+                                   daylight_hours=daylight_hours)
                 cells.append({"temp": temp, "fuel": fuel, "recovery": recovery,
                               "choices": {k: v["choice"] for k, v in row["by_intention"].items()},
                               "distinct": row["distinct_evening_choices"]})
     differs = [c for c in cells if c["distinct"] > 1]
-    return {"cells": len(cells), "different_plan_changes_evening": len(differs),
+    return {"cells": len(cells), "daylight_hours": daylight_hours,
+            "different_plan_changes_evening": len(differs),
             "examples": differs[:6], "counterexamples": [c for c in cells if c["distinct"] == 1][:3],
             "limitation": "Differences are simulated under a heuristic policy; no player preference proof."}
 
@@ -221,6 +235,7 @@ def main() -> None:
     ap.add_argument("--recovery", type=float, default=6.0)
     ap.add_argument("--temp", type=float, default=-18)
     ap.add_argument("--wind", type=float, default=0.5)
+    ap.add_argument("--daylight", type=float, default=DAYLIGHT_H)
     ap.add_argument("--no-axe", action="store_true")
     ap.add_argument("--profile", choices=("local", "novice"), default="local")
     ap.add_argument("--sweep", action="store_true")
@@ -229,15 +244,16 @@ def main() -> None:
     ap.add_argument("--md", action="store_true")
     args = ap.parse_args()
     if args.sweep:
-        result = sweep_plans()
+        result = sweep_plans(daylight_hours=args.daylight)
     elif args.paired:
-        result = paired_plans([args.temp], fuel=args.fuel, recovery=args.recovery, wind=args.wind)
+        result = paired_plans([args.temp], fuel=args.fuel, recovery=args.recovery,
+                              wind=args.wind, daylight_hours=args.daylight)
     else:
         schedule = [EXPEDITION, SHORT_WALK, UNDECIDED]
         plans = [schedule[i % len(schedule)] for i in range(args.days)]
         result = run_cycle(plans, [args.temp] * args.days, args.fuel, args.stock,
                            args.recovery, wind=args.wind, axe=not args.no_axe,
-                           profile=args.profile)
+                           profile=args.profile, daylight_hours=args.daylight)
     if args.json:
         Path(args.json).write_text(json.dumps(result, ensure_ascii=False, indent=2), encoding="utf-8")
     print(to_markdown(result) if args.md and "summary" in result else

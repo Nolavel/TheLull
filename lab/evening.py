@@ -22,6 +22,7 @@ from dataclasses import dataclass, field, replace
 
 HOURS_OF_NIGHT = 10.0
 STEP_H = 0.25
+DAYLIGHT_H = 7.0  # scenario assumption, not a fixed rule for TheLull
 
 # --- room (Hoarbound ThermalZone shape) ---------------------------------
 PASSIVE_OFFSET_C = 3.0  # a roof and walls, no fire: Hoarbound's "ruin with a roof, maybe +3"
@@ -62,6 +63,7 @@ HEAVY = Work("разобрать мебель", 1.5, 4, 55.0, 7.0)
 # Sealing gives no fuel at all: it changes the room instead, so the same fire lasts further into the night.
 # This is the author's third path and Hoarbound's "a shelter is warm because you made it warm".
 SEAL = Work("утеплить комнату", 0.75, 0, 25.0, 4.5)
+PACK = Work("подготовить снаряжение и маршрут", 0.75, 0, 18.0, 3.0)
 SEAL_COOLING_FACTOR = 0.5
 IDLE_FATIGUE_PER_H = 2.0  # just being awake and cold
 
@@ -75,6 +77,7 @@ class Body:
     stamina: float = 100.0
     fatigue: float = 45.0  # 0 = rested, 100 = spent; evening after a trip
     recovery_per_h: float = RECOVERY_PER_H
+    packed: bool = False  # preparation done before the night
 
     def stamina_recovery_per_h(self) -> float:
         """Fatigue slows breath coming back (Hoarbound: recovery pace × energy)."""
@@ -195,6 +198,11 @@ EXPEDITION = Tomorrow("дальняя экспедиция с грузом", 6.0
 UNDECIDED = Tomorrow("ещё не решил: рядом есть неизученное место", 4.0, 3.0, 60.0)
 
 
+def morning_prep_hours(tomorrow: Tomorrow) -> float:
+    """Time spent packing and checking a route after sunrise unless done tonight."""
+    return 0.25 + 0.12 * tomorrow.hours_out + 0.12 * tomorrow.load
+
+
 @dataclass
 class EveningOption:
     label: str
@@ -203,7 +211,7 @@ class EveningOption:
 
 
 def _forecast(opt: EveningOption, body: Body, room: Room, beliefs: EveningBeliefs,
-              tomorrow: Tomorrow, outside_c: float) -> dict:
+              tomorrow: Tomorrow, outside_c: float, daylight_hours: float = DAYLIGHT_H) -> dict:
     """A mental dry-run against BELIEVED fuel/cooling and visible room state.
 
     Uses the same physical night integrator as the real run, but on copies
@@ -216,6 +224,7 @@ def _forecast(opt: EveningOption, body: Body, room: Room, beliefs: EveningBelief
         body.stamina >= work.stamina_cost
         and (work is not HEAVY or (room.has_axe and room.furniture > 0))
         and (work is not SEAL or not room.sealed)
+        and (work is not PACK or not body.packed)
     ))
     work_h = beliefs.expected_work_hours(work) if work else 0.0
     added_fuel = work.fuel if work else 0
@@ -223,7 +232,10 @@ def _forecast(opt: EveningOption, body: Body, room: Room, beliefs: EveningBelief
     fire_h = beliefs.hours_of_fire(fuel_after)
     # The next-day cost is explicit. There is no table mapping an intended
     # journey to an A/B/C action.
-    day_effort = tomorrow.hours_out * (3.0 + 0.9 * tomorrow.load + 0.75)
+    travel_effort = tomorrow.hours_out * (3.0 + 0.9 * tomorrow.load + 0.75)
+    prep_h = 0.0 if body.packed or work is PACK else morning_prep_hours(tomorrow)
+    day_effort = travel_effort + prep_h * 1.5
+    daylight_overrun = max(0.0, tomorrow.hours_out + prep_h - daylight_hours)
 
     if not available:
         return {
@@ -235,6 +247,10 @@ def _forecast(opt: EveningOption, body: Body, room: Room, beliefs: EveningBelief
             "core_at_morning_if_uninterrupted": None,
             "expects_to_wake_cold": None, "morning_fatigue_expected": None,
             "day_effort_expected": round(day_effort, 1),
+        "morning_prep_hours_expected": round(prep_h, 2),
+        "daylight_overrun_expected": round(daylight_overrun, 2),
+            "morning_prep_hours_expected": round(prep_h, 2),
+            "daylight_overrun_expected": round(daylight_overrun, 2),
             "fatigue_after_trip_expected": None,
             "ready_for_tomorrow_expected": False,
             "stamina_cost": work.stamina_cost if work else 0.0,
@@ -253,14 +269,21 @@ def _forecast(opt: EveningOption, body: Body, room: Room, beliefs: EveningBelief
         furniture=room.furniture, has_axe=room.has_axe, sealed=room.sealed
     )
     shadow_body = Body(core_c=body.core_c, stamina=body.stamina,
-                       fatigue=body.fatigue, recovery_per_h=beliefs.recovery_est)
+                       fatigue=body.fatigue, recovery_per_h=beliefs.recovery_est,
+                       packed=body.packed)
 
     # Local import: evening_run already depends on this module; the runtime
     # call is safe and avoids maintaining an inconsistent second night model.
     from .evening_run import play
     predicted = play(opt.label, outside_c, shadow_room, shadow_body, beliefs)
     morning_fatigue = predicted["morning_fatigue"]
+    prep_h = 0.0 if shadow_body.packed else morning_prep_hours(tomorrow)
+    day_effort = travel_effort + prep_h * 1.5
+    daylight_overrun = max(0.0, tomorrow.hours_out + prep_h - daylight_hours)
     projected_fatigue_after_trip = morning_fatigue + day_effort
+    morning_fit = (morning_fatigue <= tomorrow.max_morning_fatigue
+                   and projected_fatigue_after_trip <= 90.0
+                   and predicted["morning_core_c"] >= HYPOTHERMIC_C)
     return {
         "option": opt.label,
         "available": True,
@@ -275,8 +298,7 @@ def _forecast(opt: EveningOption, body: Body, room: Room, beliefs: EveningBelief
         "morning_fatigue_expected": morning_fatigue,
         "day_effort_expected": round(day_effort, 1),
         "fatigue_after_trip_expected": round(projected_fatigue_after_trip, 1),
-        "ready_for_tomorrow_expected": (morning_fatigue <= tomorrow.max_morning_fatigue
-                                       and projected_fatigue_after_trip <= 90.0),
+        "ready_for_tomorrow_expected": morning_fit and daylight_overrun <= 1e-9,
         "stamina_cost": work.stamina_cost if work else 0.0,
         "basis": opt.reason,
     }
@@ -284,24 +306,26 @@ def _forecast(opt: EveningOption, body: Body, room: Room, beliefs: EveningBelief
 
 OPTIONS = (EveningOption("A: разобрать мебель, топить дольше", HEAVY, "больше топлива, но поздно лечь"),
            EveningOption("B: лечь раньше на том, что есть", None, "сохранить силы, рискнуть остыть"),
-           EveningOption("C: утеплить комнату и лечь раньше", SEAL, "тепло держится дольше без новых дров"))
+           EveningOption("C: утеплить комнату и лечь раньше", SEAL, "тепло держится дольше без новых дров"),
+           EveningOption("D: подготовить вещи и маршрут к утру", PACK, "готовый рюкзак сохраняет время света завтра"))
 
 
 def options(body: Body, room: Room, beliefs: EveningBeliefs, tomorrow: Tomorrow,
-            outside_c: float) -> list[dict]:
+            outside_c: float, daylight_hours: float = DAYLIGHT_H) -> list[dict]:
     """Three options, each with the player's own expectation of how it ends. None is scored as correct."""
-    return [_forecast(o, body, room, beliefs, tomorrow, outside_c) for o in OPTIONS]
+    return [_forecast(o, body, room, beliefs, tomorrow, outside_c, daylight_hours) for o in OPTIONS]
 
 
 def choose(body: Body, room: Room, beliefs: EveningBeliefs, tomorrow: Tomorrow,
-           outside_c: float) -> tuple[dict, str, Tomorrow]:
+           outside_c: float, daylight_hours: float = DAYLIGHT_H) -> tuple[dict, str, Tomorrow]:
     """Weigh predicted night's disruption and next day's load. No true-night oracle.
 
     Plans change the *cost* of fatigue, not a lookup table from plan to A/B/C.
     Decisions are research heuristics, not a proven human policy.
     """
-    opts = options(body, room, beliefs, tomorrow, outside_c)
+    opts = options(body, room, beliefs, tomorrow, outside_c, daylight_hours)
     eligible = [o for o in opts if o["available"]]
+    can_keep_plan = any(o["ready_for_tomorrow_expected"] for o in eligible)
     if not eligible:
         return next(o for o in opts if o["option"].startswith("B:")), "работа недоступна", tomorrow
 
@@ -315,7 +339,10 @@ def choose(body: Body, room: Room, beliefs: EveningBeliefs, tomorrow: Tomorrow,
         strength = o["morning_fatigue_expected"] * (0.12 + tomorrow.hours_out * 0.07)
         # Time and finite materials have an opportunity cost even when the night stays warm.
         materials = 2.5 if o["option"].startswith("A:") else (1.5 if o["option"].startswith("C:") else 0.0)
-        return cold + future + unready + strength + 1.5 * o["work_hours_expected"] + materials
+        # Penalize the lost itinerary only when a viable preparation would preserve it.
+        # If the whole night is too cold or exhausting, do not force packing.
+        lost_plan = 25.0 if tomorrow.droppable and can_keep_plan and not o["ready_for_tomorrow_expected"] else 0.0
+        return cold + future + unready + strength + 1.5 * o["work_hours_expected"] + materials + lost_plan
 
     pick = min(eligible, key=lambda o: (opportunity_cost(o), o["work_hours_expected"]))
     after = tomorrow
@@ -325,5 +352,6 @@ def choose(body: Body, room: Room, beliefs: EveningBeliefs, tomorrow: Tomorrow,
                         max_morning_fatigue=SHORT_WALK.max_morning_fatigue, droppable=False)
     reason = (f"сравнил ожидаемый холод, работу и запас сил на «{tomorrow.name}»; "
               f"выбрал минимальную цену {opportunity_cost(pick):.1f}"
-              + ("; отложил дальний план" if after is not tomorrow else ""))
+              + ("; отложил дальний план" if after is not tomorrow else "")
+              + ("; подготовка сэкономит утренний свет" if pick["option"].startswith("D:") else ""))
     return pick, reason, after

@@ -11,7 +11,7 @@ import json
 from dataclasses import asdict, replace
 
 from .evening import (COOLING_RATE_C_PER_H, EXPEDITION, HEAVY, HOURS_OF_NIGHT, HYPOTHERMIC_C,
-                      IDLE_FATIGUE_PER_H, SEAL, SEAL_COOLING_FACTOR, SHORT_WALK, STEP_H, UNDECIDED,
+                      IDLE_FATIGUE_PER_H, SEAL, PACK, SEAL_COOLING_FACTOR, SHORT_WALK, STEP_H, UNDECIDED,
                       RECOVERY_PER_H, WAKE_COLD_C, Body, EveningBeliefs, Room, Tomorrow, choose,
                       options, sleep_refusal, step_body)
 
@@ -19,11 +19,13 @@ OUTSIDE_C = -18.0  # Hoarbound's reference exposure figure; placeholder, not The
 
 
 def play(option_label: str, outside_c: float, room: Room, body: Body, beliefs: EveningBeliefs) -> dict:
-    work = {"A": HEAVY, "B": None, "C": SEAL}[option_label[0]]
+    work = {"A": HEAVY, "B": None, "C": SEAL, "D": PACK}[option_label[0]]
     if work is HEAVY and (not room.has_axe or room.furniture <= 0):
         raise ValueError("нельзя разобрать мебель без топора и доступной мебели")
     if work is SEAL and room.sealed:
         raise ValueError("комната уже утеплена")
+    if work is PACK and body.packed:
+        raise ValueError("вещи уже собраны")
     if work is not None and body.stamina < work.stamina_cost:
         raise ValueError("недостаточно кратковременной выносливости для работы")
     log, hour = [], 0.0
@@ -45,6 +47,9 @@ def play(option_label: str, outside_c: float, room: Room, body: Body, beliefs: E
             room.cooling_rate *= SEAL_COOLING_FACTOR
             room.sealed = True
             gained = f"комната теперь остывает вдвое медленнее ({room.cooling_rate:.1f}°/ч)"
+        elif work is PACK:
+            body.packed = True
+            gained = "снаряжение и маршрут готовы к выходу"
         else:
             gained = f"{work.fuel} топлива"
         log.append(f"{hour:4.1f} ч: {work.name} — {gained}, "
@@ -146,6 +151,7 @@ def play(option_label: str, outside_c: float, room: Room, body: Body, beliefs: E
             "fire_out_at": round(fire_out_at, 1) if fire_out_at is not None else None,
             "hours_below_hypothermic": round(hypo_hours, 1), "coldest_core_c": round(coldest, 1),
             "morning_fatigue": round(body.fatigue), "morning_stamina": round(body.stamina),
+             "packed_for_morning": body.packed,
             "morning_core_c": round(body.core_c, 1), "fuel_left": round(room.fuel, 1),
             "sleep_refused": refusal, "log": log}
 
