@@ -41,6 +41,12 @@ jobs:
             echo >> "$GITHUB_STEP_SUMMARY"
           done
 
+      - name: Linked evening-night-day loop (three persistent days)
+        run: |
+          python3 -m lab.linked_days --days 3 --fuel 5 --stock 8 --json lab-results/linked_days.json --md >> "$GITHUB_STEP_SUMMARY"
+          echo >> "$GITHUB_STEP_SUMMARY"
+          python3 -m lab.linked_days --sweep --json lab-results/linked_sweep.json >> /dev/null
+
       - uses: actions/upload-artifact@v4
         with:
           name: lab-results
