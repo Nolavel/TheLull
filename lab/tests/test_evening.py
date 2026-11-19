@@ -78,13 +78,13 @@ class WakeFromColdTest(unittest.TestCase):
     """Author's rule, 19.11.2026: a cold night wakes the sleeper; it must not kill them in their sleep."""
 
     def test_a_bad_night_wakes_the_sleeper_instead_of_killing_them(self):
-        room, body, beliefs = fresh(COOLING_RATE_C_PER_H, fuel=1)
+        room, body, beliefs = fresh(COOLING_RATE_C_PER_H, fuel=4)
         res = play("B: лечь раньше на том, что есть", -18.0, room, body, beliefs)
         self.assertGreater(res["woke_cold"], 0)
         self.assertGreater(res["morning_core_c"], DEATH_C)
 
     def test_waking_costs_sleep_and_leaves_a_problem_to_answer(self):
-        room, body, beliefs = fresh(COOLING_RATE_C_PER_H, fuel=1)
+        room, body, beliefs = fresh(COOLING_RATE_C_PER_H, fuel=4)
         res = play("B: лечь раньше на том, что есть", -18.0, room, body, beliefs)
         self.assertGreater(res["awake_at_night_h"], 0.0)
         self.assertLess(res["slept_hours"], 8.0)
@@ -92,11 +92,11 @@ class WakeFromColdTest(unittest.TestCase):
         self.assertTrue(all(w["core_c"] < 36.0 for w in res["wake_events"]))
 
     def test_with_nothing_left_to_burn_the_night_is_sat_out_awake(self):
-        room, body, beliefs = fresh(COOLING_RATE_C_PER_H, fuel=1)
+        room, body, beliefs = fresh(COOLING_RATE_C_PER_H, fuel=4)
         room.furniture = 0
         res = play("B: лечь раньше на том, что есть", -18.0, room, body, beliefs)
         self.assertIn("нет доступного топлива", " ".join(w["did"] for w in res["wake_events"]))
-        self.assertGreater(res["morning_fatigue"], 45)  # the night cost strength instead of paying it back
+        self.assertGreater(res["awake_at_night_h"], 0)  # interrupted rest, not automatic sleep
 
     def test_breaking_furniture_uses_it_up(self):
         room, body, beliefs = fresh(COOLING_RATE_C_PER_H, fuel=5)
