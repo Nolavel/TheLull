@@ -1,0 +1,6 @@
+# Unreal binary assets: never diff or merge as text.
+*.uasset binary
+*.umap binary
+*.fbx binary
+*.png binary
+*.wav binary

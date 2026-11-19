@@ -18,9 +18,6 @@ Build/*/
 Plugins/**/Binaries/
 Plugins/**/Intermediate/
 
-# Content: binary assets wait for an LFS decision (see docs/setup/LOCAL_UE.md)
-Content/
-
 # Local secrets and agent settings
 .env
 .claude/settings.local.json
