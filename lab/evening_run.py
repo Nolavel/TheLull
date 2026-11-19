@@ -257,36 +257,28 @@ def plans(outside_c: float, cooling: float, fuel: int, recovery: float = RECOVER
 
 
 def three_days(outside_c: float, cooling: float, days: int) -> dict:
-    room, body, beliefs = fresh(cooling)
-    out = []
-    for day in range(1, days + 1):
-        room = replace(room, heated_offset_c=0.0, fire_lit=False, cooling_rate=cooling)
-        considered = options(body, room, beliefs, UNDECIDED, outside_c)
-        pick, why, _ = choose(body, room, beliefs, UNDECIDED, outside_c)
-        before = dict(beliefs.work_hours_est)
-        result = play(pick["option"], outside_c, room, body, beliefs)
-
-        # Morning lesson: the fire did not last as long as expected, or the room went cold faster.
-        lesson = ""
-        if result["fire_out_at"] is not None and result["fire_out_at"] < HOURS_OF_NIGHT - 1:
-            old = beliefs.burn_rate_est
-            beliefs.burn_rate_est = min(2.5, beliefs.burn_rate_est * 1.25)
-            lesson = f"огонь кончился раньше: расход топлива {old:.2f}→{beliefs.burn_rate_est:.2f} в час"
-        elif result["hours_below_hypothermic"] > 0:
-            old = beliefs.cooling_rate_est
-            beliefs.cooling_rate_est = min(8.0, beliefs.cooling_rate_est * 1.3)
-            lesson = f"ночью замёрз: комната остывает быстрее, чем думал ({old:.1f}→{beliefs.cooling_rate_est:.1f})"
-
-        body.fatigue = min(100.0, body.fatigue + 25.0)  # the next day's trip, outside this experiment
-        room.fuel = max(room.fuel, 2)  # one day's haul, so the evening question repeats
-        out.append({"day": day, "considered": considered, "chose": pick["option"], "why": why,
-                    "result": {k: v for k, v in result.items() if k != "log"},
-                    "log": result["log"], "lesson": lesson or "ничего нового не узнал",
-                    "work_hours_before": before})
-    return {"scenario": {"outside_c": outside_c, "cooling_rate_c_per_h": cooling, "days": days},
-            "days": out,
-            "limitations": ["Поведение модели, не доказательство интереса для игрока.",
-                            "Утренняя усталость и добыча следующего дня — заглушки."]}
+    """Legacy CLI entry: now uses persistent nights/days, never oracular lessons or free fuel."""
+    if days < 1:
+        raise ValueError("days must be positive")
+    from .linked_days import run_cycle  # local import avoids import cycle with play()
+    schedule = (UNDECIDED, EXPEDITION, SHORT_WALK)
+    plans = [schedule[i % len(schedule)] for i in range(days)]
+    linked = run_cycle(plans, [outside_c] * days, fuel=3, depot_fuel=10, cooling=cooling)
+    return {
+        "scenario": linked["scenario"],
+        "days": [
+            {
+                "day": d["day"], "considered": [d["forecast"]],
+                "chose": d["choice"], "why": d["why"],
+                "before_evening": d["before_evening"],
+                "result": d["night"], "log": d["night"].get("log", []),
+                "lesson": d["lesson"], "daytime": d["daytime"],
+                "after_day": d["after_day"]
+            }
+            for d in linked["days"]
+        ],
+        "limitations": linked["limits"],
+    }
 
 
 def main() -> None:
