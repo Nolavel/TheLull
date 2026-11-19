@@ -57,7 +57,7 @@ def play(option_label: str, outside_c: float, room: Room, body: Body, beliefs: E
     fuel_at_ignition = room.fuel
     fire_ignition_h = hour
     room.fire_lit = room.fuel > 0
-    if refusal == "слишком холодно, чтобы ложиться" and room.fire_lit:
+    if refusal in ("слишком холодно, чтобы ложиться", "сначала нужно согреться") and room.fire_lit:
         # Warm the room first, as Hoarbound's sleep refusal intends: prepare, then sleep.
         waited = 0.0
         while sleep_refusal(room, body, outside_c) and room.fire_lit and waited < 3.0:
