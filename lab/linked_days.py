@@ -16,6 +16,12 @@ from .evening import (COOLING_RATE_C_PER_H, EXPEDITION, HYPOTHERMIC_C,
 from .evening_run import fresh, play
 
 
+# Priors are explicit research assumptions, not facts about real players.
+# A novice may initially overestimate how long fuel lasts and the room retains heat.
+PROFILE_BELIEFS = {"local": (1.0, COOLING_RATE_C_PER_H),
+                   "novice": (0.65, 2.0)}
+
+
 @dataclass
 class Depot:
     """Finite fuel available to retrieve; not an unexplained daily grant."""
@@ -80,19 +86,24 @@ def do_next_day(plan: Tomorrow, body: Body, room: Room, depot: Depot,
 def run_cycle(plans: list[Tomorrow], temperatures: list[float] | None = None,
               fuel: int = 5, depot_fuel: int = 10, recovery_per_h: float = 6.0,
               cooling: float = COOLING_RATE_C_PER_H, wind: float = 0.5,
-              axe: bool = True) -> dict:
+              axe: bool = True, profile: str = "local") -> dict:
+    if profile not in PROFILE_BELIEFS:
+        raise ValueError("unknown experience profile")
     if fuel < 0 or depot_fuel < 0 or recovery_per_h <= 0 or not plans:
         raise ValueError("invalid starting state or empty plan sequence")
     temperatures = temperatures or [-18.0] * len(plans)
     if len(temperatures) != len(plans):
         raise ValueError("temperatures must match plans")
     room, body, beliefs = fresh(cooling, fuel=fuel, recovery=recovery_per_h)
+    beliefs.burn_rate_est, beliefs.cooling_rate_est = PROFILE_BELIEFS[profile]
+    initial_burn_belief = beliefs.burn_rate_est
     room.has_axe = axe
     depot = Depot(depot_fuel)
     records = []
     for day, (plan, outside_c) in enumerate(zip(plans, temperatures), start=1):
         start = {"fuel": round(room.fuel, 2), "furniture": room.furniture, "sealed": room.sealed,
-                 "fatigue": round(body.fatigue, 1), "core_c": round(body.core_c, 1)}
+                 "fatigue": round(body.fatigue, 1), "core_c": round(body.core_c, 1),
+                 "burn_rate_belief": round(beliefs.burn_rate_est, 3)}
         pick, reason, revised_plan = choose(body, room, beliefs, plan, outside_c)
         night = play(pick["option"], outside_c, room, body, beliefs)
         # No learning from inaccessible truth (e.g. the exact moment a fire
@@ -101,21 +112,26 @@ def run_cycle(plans: list[Tomorrow], temperatures: list[float] | None = None,
         observed = night.get("observed_burn_rate")
         if observed is not None:
             lesson = beliefs.observe_burn_rate(observed)
+        elif night.get("burn_rate_lower_bound") is not None:
+            lesson = beliefs.observe_rate_lower_bound(night["burn_rate_lower_bound"])
         next_day = do_next_day(revised_plan, body, room, depot, wind)
         records.append({
             "day": day, "outside_c": outside_c, "intention": plan.name,
             "before_evening": start, "choice": pick["option"], "why": reason,
             "forecast": pick, "after_evening_plan": revised_plan.name,
             "night": {k: v for k, v in night.items() if k != "log"},
+            "core_forecast_error_c": round(
+                night["morning_core_c"] - pick["core_at_morning_if_uninterrupted"], 2),
             "daytime": asdict(next_day), "lesson": lesson,
             "after_day": {"fuel": round(room.fuel, 2), "furniture": room.furniture,
                           "sealed": room.sealed, "fatigue": round(body.fatigue, 1),
-                          "core_c": round(body.core_c, 1)},
+                          "core_c": round(body.core_c, 1),
+                          "burn_rate_belief": round(beliefs.burn_rate_est, 3)},
         })
     return {
         "scenario": {"plans": [p.name for p in plans], "temperatures": temperatures,
                      "fuel": fuel, "depot_fuel": depot_fuel, "recovery_per_h": recovery_per_h,
-                     "cooling": cooling, "wind": wind, "axe": axe},
+                     "cooling": cooling, "wind": wind, "axe": axe, "profile": profile},
         "days": records,
         "summary": {"evening_choices": [d["choice"][:1] for d in records],
                     "trips_completed": sum(d["daytime"]["attempted"] for d in records),
@@ -123,7 +139,11 @@ def run_cycle(plans: list[Tomorrow], temperatures: list[float] | None = None,
                     "cold_wakes": sum(d["night"]["woke_cold"] for d in records),
                     "depot_remaining": depot.fuel,
                     "furniture_remaining": room.furniture,
-                    "fatigue_end": round(body.fatigue, 1)},
+                    "fatigue_end": round(body.fatigue, 1),
+                    "burn_rate_belief_start_end": [
+                        round(initial_burn_belief, 3), round(beliefs.burn_rate_est, 3)],
+                    "mean_abs_core_forecast_error_c": round(
+                        sum(abs(d["core_forecast_error_c"]) for d in records) / len(records), 2)},
         "limits": [
             "Travel effort is a placeholder: not a city map, gear model or outdoor thermal simulation.",
             "Predictions depend on the agent's beliefs, not hindsight; outcomes are not emotions.",
@@ -202,6 +222,7 @@ def main() -> None:
     ap.add_argument("--temp", type=float, default=-18)
     ap.add_argument("--wind", type=float, default=0.5)
     ap.add_argument("--no-axe", action="store_true")
+    ap.add_argument("--profile", choices=("local", "novice"), default="local")
     ap.add_argument("--sweep", action="store_true")
     ap.add_argument("--paired", action="store_true")
     ap.add_argument("--json")
@@ -215,7 +236,8 @@ def main() -> None:
         schedule = [EXPEDITION, SHORT_WALK, UNDECIDED]
         plans = [schedule[i % len(schedule)] for i in range(args.days)]
         result = run_cycle(plans, [args.temp] * args.days, args.fuel, args.stock,
-                           args.recovery, wind=args.wind, axe=not args.no_axe)
+                           args.recovery, wind=args.wind, axe=not args.no_axe,
+                           profile=args.profile)
     if args.json:
         Path(args.json).write_text(json.dumps(result, ensure_ascii=False, indent=2), encoding="utf-8")
     print(to_markdown(result) if args.md and "summary" in result else
