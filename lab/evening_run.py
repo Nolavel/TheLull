@@ -74,6 +74,7 @@ def play(option_label: str, outside_c: float, room: Room, body: Body, beliefs: E
     night_hours = max(0.0, HOURS_OF_NIGHT - hour)
     fire_out_at, coldest, hypo_hours = None, body.core_c, 0.0
     slept, awake_h, wakes = 0.0, 0.0, []
+    burn_rate_lower_bound = None
     asleep = refusal is None
     while slept + awake_h + 1e-8 < night_hours:
         was_lit = room.fire_lit
@@ -81,6 +82,11 @@ def play(option_label: str, outside_c: float, room: Room, body: Body, beliefs: E
         if asleep and body.core_c < WAKE_COLD_C:
             asleep = False
             at, woke_at_c = hour + slept + awake_h, body.core_c
+            # First wake: seeing an extinguished stove proves only that its
+            # initial fuel lasted NO LONGER than elapsed time. Not exact time.
+            if (not wakes and not room.fire_lit and room.fuel <= 0
+                    and fuel_at_ignition > 0 and at > fire_ignition_h):
+                burn_rate_lower_bound = round(fuel_at_ignition / (at - fire_ignition_h), 3)
             if room.fuel > 0 and not room.fire_lit:
                 room.fire_lit = True
                 wakes.append({"at": round(at, 1), "core_c": round(woke_at_c, 1), "did": "разжёг остаток дров"})
@@ -134,6 +140,7 @@ def play(option_label: str, outside_c: float, room: Room, body: Body, beliefs: E
         observed_burn_rate = round((fuel_at_ignition - room.fuel) / fire_elapsed, 3)
 
     return {"option": option_label, "observed_burn_rate": observed_burn_rate,
+            "burn_rate_lower_bound": burn_rate_lower_bound,
             "slept_hours": round(slept, 1), "awake_at_night_h": round(awake_h, 1),
             "woke_cold": len(wakes), "wake_events": wakes, "went_to_bed_at": round(hour, 1),
             "fire_out_at": round(fire_out_at, 1) if fire_out_at is not None else None,
