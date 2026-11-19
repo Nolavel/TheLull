@@ -2,7 +2,8 @@ import unittest
 
 from lab.evening import (COOLING_RATE_C_PER_H, DEATH_C, HYPOTHERMIC_C, START_CORE_C, Body, Room,
                          sleep_refusal, step_body)
-from lab.evening_run import OUTSIDE_C, compare, three_days
+from lab.evening_run import fresh, play
+from lab.evening_run import OUTSIDE_C, compare, sweep, three_days
 
 
 class ThermalTest(unittest.TestCase):
@@ -42,10 +43,20 @@ class ThermalTest(unittest.TestCase):
 
 
 class ChoiceTest(unittest.TestCase):
-    def test_no_option_wins_on_every_axis(self):
-        """If one option dominated, the evening would be a right answer, not a decision."""
-        for cooling in (1.5, COOLING_RATE_C_PER_H, 6.0):
-            self.assertIsNone(compare(OUTSIDE_C, cooling)["dominant_option"], f"cooling={cooling}")
+    def test_the_sweep_finds_conditions_where_a_real_choice_exists(self):
+        """Not an assumption that a choice always exists: a map of where it does."""
+        res = sweep(COOLING_RATE_C_PER_H)
+        kinds = {r["verdict"] for r in res["rows"]}
+        self.assertIn("настоящий выбор", kinds)
+        self.assertIn("одна вынужденная работа", kinds)  # too cold: one answer, not a decision
+        self.assertGreater(res["cells_with_a_real_choice"], 0)
+
+    def test_a_cell_called_a_real_choice_has_no_dominant_option(self):
+        res = sweep(COOLING_RATE_C_PER_H)
+        cell = next(r for r in res["rows"] if r["verdict"] == "настоящий выбор")
+        detail = compare(cell["outside_c"], COOLING_RATE_C_PER_H, cell["start_fuel"])
+        self.assertIsNone(detail["dominant_option"])
+        self.assertGreater(len(detail["viable_options"]), 1)
 
     def test_last_night_is_felt_the_next_morning(self):
         days = three_days(OUTSIDE_C, COOLING_RATE_C_PER_H, 3)["days"]
@@ -61,3 +72,34 @@ class ChoiceTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class WakeFromColdTest(unittest.TestCase):
+    """Author's rule, 19.11.2026: a cold night wakes the sleeper; it must not kill them in their sleep."""
+
+    def test_a_bad_night_wakes_the_sleeper_instead_of_killing_them(self):
+        room, body, beliefs = fresh(COOLING_RATE_C_PER_H, fuel=1)
+        res = play("B: лечь раньше на том, что есть", -18.0, room, body, beliefs)
+        self.assertGreater(res["woke_cold"], 0)
+        self.assertGreater(res["morning_core_c"], DEATH_C)
+
+    def test_waking_costs_sleep_and_leaves_a_problem_to_answer(self):
+        room, body, beliefs = fresh(COOLING_RATE_C_PER_H, fuel=1)
+        res = play("B: лечь раньше на том, что есть", -18.0, room, body, beliefs)
+        self.assertGreater(res["awake_at_night_h"], 0.0)
+        self.assertLess(res["slept_hours"], 8.0)
+        self.assertTrue(res["wake_events"])
+        self.assertTrue(all(w["core_c"] < 36.0 for w in res["wake_events"]))
+
+    def test_with_nothing_left_to_burn_the_night_is_sat_out_awake(self):
+        room, body, beliefs = fresh(COOLING_RATE_C_PER_H, fuel=1)
+        room.furniture = 0
+        res = play("B: лечь раньше на том, что есть", -18.0, room, body, beliefs)
+        self.assertIn("жечь нечего", " ".join(w["did"] for w in res["wake_events"]))
+        self.assertGreater(res["morning_fatigue"], 45)  # the night cost strength instead of paying it back
+
+    def test_breaking_furniture_uses_it_up(self):
+        room, body, beliefs = fresh(COOLING_RATE_C_PER_H, fuel=5)
+        before = room.furniture
+        play("A: разобрать мебель, топить дольше", -6.0, room, body, beliefs)
+        self.assertLess(room.furniture, before)
