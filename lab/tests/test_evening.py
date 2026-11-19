@@ -58,16 +58,19 @@ class ChoiceTest(unittest.TestCase):
         self.assertIsNone(detail["dominant_option"])
         self.assertGreater(len(detail["viable_options"]), 1)
 
-    def test_last_night_is_felt_the_next_morning(self):
+    def test_last_night_carries_state_into_the_next_evening(self):
         days = three_days(OUTSIDE_C, COOLING_RATE_C_PER_H, 3)["days"]
-        self.assertGreater(days[-1]["result"]["morning_fatigue"], days[0]["result"]["morning_fatigue"])
+        for previous, following in zip(days, days[1:]):
+            self.assertAlmostEqual(previous["after_day"]["fatigue"],
+                                   following["before_evening"]["fatigue"], delta=0.11)
+            self.assertEqual(previous["after_day"]["furniture"],
+                             following["before_evening"]["furniture"])
 
-    def test_the_player_learns_fuel_burns_faster_than_it_thought(self):
+    def test_the_player_does_not_learn_a_hidden_fire_out_time(self):
         days = three_days(OUTSIDE_C, COOLING_RATE_C_PER_H, 3)["days"]
-        self.assertTrue(any("расход топлива" in d["lesson"] for d in days))
-        first = days[0]["considered"][0]["fire_hours_expected"]
-        last = days[-1]["considered"][0]["fire_hours_expected"]
-        self.assertLess(last, first)  # the estimate moved, and in the direction experience showed
+        self.assertFalse(any("огонь кончился раньше" in d["lesson"] for d in days))
+        self.assertTrue(all(d["lesson"].startswith(("точного наблюдения", "наблюдаемый расход"))
+                            for d in days))
 
 
 if __name__ == "__main__":
@@ -145,3 +148,24 @@ class ToolAndBeliefTest(unittest.TestCase):
         self.assertFalse(room.fire_lit)
         self.assertAlmostEqual(room.fuel, 0.0)
         self.assertLess(room.heated_offset_c, 1.0)
+
+class PersistentWakeTest(unittest.TestCase):
+    def test_cannot_fall_back_asleep_while_still_cold(self):
+        room, body, beliefs = fresh(COOLING_RATE_C_PER_H, fuel=4)
+        room.has_axe = False
+        res = play("B: лечь раньше на том, что есть", -18.0, room, body, beliefs)
+        self.assertGreaterEqual(res["woke_cold"], 1)
+        # Continuous cold awake time must not create a new wake every quarter-hour.
+        self.assertEqual(res["woke_cold"], 1)
+
+    def test_observed_burn_needs_surviving_fire_not_oracle_expiry(self):
+        room, body, beliefs = fresh(COOLING_RATE_C_PER_H, fuel=30)
+        res = play("B: лечь раньше на том, что есть", -6.0, room, body, beliefs)
+        self.assertIsNotNone(res["observed_burn_rate"])
+        self.assertAlmostEqual(res["observed_burn_rate"], 1.0, delta=0.01)
+
+    def test_expired_fire_does_not_reveal_precise_burn_rate(self):
+        room, body, beliefs = fresh(COOLING_RATE_C_PER_H, fuel=4)
+        room.has_axe = False
+        res = play("B: лечь раньше на том, что есть", -18.0, room, body, beliefs)
+        self.assertIsNone(res["observed_burn_rate"])
