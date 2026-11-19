@@ -18,7 +18,6 @@ nothing was tuned to make the three options come out even — if one dominates, 
 from __future__ import annotations
 
 import json
-import math
 from dataclasses import dataclass, field, replace
 
 HOURS_OF_NIGHT = 10.0
@@ -139,6 +138,8 @@ def sleep_refusal(room: Room, body: Body, outside_c: float) -> str | None:
     """Named reason, as Hoarbound's SleepController does. Not a save gate: the lab never blocks progress."""
     if room.felt_c(outside_c) < 5.0:
         return "слишком холодно, чтобы ложиться"
+    if body.core_c < WAKE_COLD_C + 0.25:
+        return "сначала нужно согреться"
     if body.fatigue < 15.0:
         return "ещё не устал настолько, чтобы заснуть"
     return None
@@ -192,7 +193,13 @@ class EveningOption:
 
 def _forecast(opt: EveningOption, body: Body, room: Room, beliefs: EveningBeliefs,
               tomorrow: Tomorrow, outside_c: float) -> dict:
-    """What the player *expects*, from its own beliefs. It never reads the night's real outcome."""
+    """A mental dry-run against BELIEVED fuel/cooling and visible room state.
+
+    Uses the same physical night integrator as the real run, but on copies
+    with the agent's estimates. It never reads the future night result.
+    This removes the earlier bug where one hour below comfort automatically
+    meant waking despite the body's thermal inertia.
+    """
     work = opt.work
     available = (work is None or (
         body.stamina >= work.stamina_cost
@@ -200,65 +207,61 @@ def _forecast(opt: EveningOption, body: Body, room: Room, beliefs: EveningBelief
         and (work is not SEAL or not room.sealed)
     ))
     work_h = beliefs.expected_work_hours(work) if work else 0.0
-    fuel_after = room.fuel + (work.fuel if work else 0)
-    night_h = HOURS_OF_NIGHT - work_h
+    added_fuel = work.fuel if work else 0
+    fuel_after = room.fuel + added_fuel
     fire_h = beliefs.hours_of_fire(fuel_after)
-    cooling = beliefs.cooling_rate_est * (SEAL_COOLING_FACTOR if work is SEAL else 1.0)
-    # Cooling starts when the room drops below *comfort*, but this does NOT
-    # mean the body instantly wakes. Predict core-temperature loss by integrating
-    # the cooling deficit, using the agent's *estimated* room / burn rates.
-    # Hoarbound's ThermalManager likewise has thermal inertia; this forecast
-    # remains approximate, not an oracle for the actual night.
-    hours_after_fire = max(0.0, night_h - fire_h)
-    peak_offset = min(MAX_HEATED_OFFSET_C, room.heated_offset_c + HEATING_RATE_C_PER_H * fire_h)
-    needed = COMFORT_C - CLOTHING_INSULATION_C - BASAL_HEAT_C - PASSIVE_OFFSET_C - outside_c
-    warm_tail_h = max(0.0, (peak_offset - needed) / max(0.1, cooling))
-    cold_h = max(0.0, hours_after_fire - warm_tail_h)
-    initial_deficit = max(0.0, needed - peak_offset)
-    deficit_area = initial_deficit * hours_after_fire + 0.5 * cooling * cold_h * cold_h
-    work_deficit = max(0.0, needed - room.heated_offset_c)
-    core_after_work = body.core_c - work_deficit * COOLING_COEF * work_h
-    source_effective = (outside_c + PASSIVE_OFFSET_C + peak_offset
-                        + HEAT_SOURCE_OFFSET_C + CLOTHING_INSULATION_C + BASAL_HEAT_C)
-    rewarm = max(0.0, source_effective - COMFORT_C) * REWARM_COEF * min(fire_h, 2.0)
-    core_when_fire_dies = min(START_CORE_C, core_after_work + rewarm)
-    predicted_core_end = core_when_fire_dies - COOLING_COEF * deficit_area
+    # The next-day cost is explicit. There is no table mapping an intended
+    # journey to an A/B/C action.
+    day_effort = tomorrow.hours_out * (3.0 + 0.9 * tomorrow.load + 0.75)
 
-    if predicted_core_end >= WAKE_COLD_C or hours_after_fire <= 0:
-        awake_expected = 0.0
-    else:
-        # Solve core loss(t) == available thermal reserve, without reading
-        # weather.storm_end or the actual outcome. All inputs are beliefs.
-        reserve = max(0.0, core_when_fire_dies - WAKE_COLD_C)
-        rate = max(0.1, cooling)
-        if initial_deficit > 0.0:
-            t_until_wake = (-initial_deficit +
-                            math.sqrt(initial_deficit ** 2 + 2 * rate * reserve / COOLING_COEF)) / rate
-        else:
-            t_until_wake = warm_tail_h + math.sqrt(2 * reserve / (COOLING_COEF * rate))
-        awake_expected = max(0.0, hours_after_fire - t_until_wake)
+    if not available:
+        return {
+            "option": opt.label, "available": False,
+            "work_hours_expected": round(work_h, 2),
+            "fuel_after": fuel_after, "fire_hours_expected": round(fire_h, 1),
+            "night_hours": round(HOURS_OF_NIGHT - work_h, 1),
+            "cold_hours_expected": None, "wake_hours_expected": None,
+            "core_at_morning_if_uninterrupted": None,
+            "expects_to_wake_cold": None, "morning_fatigue_expected": None,
+            "day_effort_expected": round(day_effort, 1),
+            "fatigue_after_trip_expected": None,
+            "ready_for_tomorrow_expected": False,
+            "stamina_cost": work.stamina_cost if work else 0.0,
+            "basis": opt.reason,
+        }
 
-    expects_to_wake = awake_expected > 0.0
-    fatigue_after_work = body.fatigue + (work.fatigue_per_h * work_h if work else 0.0)
-    slept_h = max(0.0, night_h - awake_expected)
-    morning_fatigue = max(0.0, fatigue_after_work - beliefs.recovery_est * slept_h
-                          + 2.0 * awake_expected)
-    # Simplified next-day effort (NOT simulated walking yet).
-    # Both the chosen plan and the load affect the predicted reserve.
-    day_effort = tomorrow.hours_out * (3.0 + 0.9 * tomorrow.load)
+    # Convert the *believed* burn rate into virtual fuel-hours. With work
+    # included, the shadow stove will last (known fuel + known yield) / rate.
+    # Real room, furniture, body and the agent's beliefs remain untouched.
+    rate = max(0.1, beliefs.burn_rate_est)
+    virtual_fuel = max(0.0, fuel_after / rate - added_fuel)
+    shadow_room = Room(
+        heated_offset_c=room.heated_offset_c, fuel=virtual_fuel,
+        fire_lit=room.fire_lit,
+        cooling_rate=beliefs.cooling_rate_est * (SEAL_COOLING_FACTOR if room.sealed else 1.0),
+        furniture=room.furniture, has_axe=room.has_axe, sealed=room.sealed
+    )
+    shadow_body = Body(core_c=body.core_c, stamina=body.stamina,
+                       fatigue=body.fatigue, recovery_per_h=beliefs.recovery_est)
+
+    # Local import: evening_run already depends on this module; the runtime
+    # call is safe and avoids maintaining an inconsistent second night model.
+    from .evening_run import play
+    predicted = play(opt.label, outside_c, shadow_room, shadow_body, beliefs)
+    morning_fatigue = predicted["morning_fatigue"]
     projected_fatigue_after_trip = morning_fatigue + day_effort
     return {
         "option": opt.label,
-        "available": available,
+        "available": True,
         "work_hours_expected": round(work_h, 2),
         "fuel_after": fuel_after,
         "fire_hours_expected": round(fire_h, 1),
-        "night_hours": round(night_h, 1),
-        "cold_hours_expected": round(cold_h, 1),
-        "wake_hours_expected": round(awake_expected, 2),
-        "core_at_morning_if_uninterrupted": round(predicted_core_end, 2),
-        "expects_to_wake_cold": expects_to_wake,
-        "morning_fatigue_expected": round(morning_fatigue, 1),
+        "night_hours": round(HOURS_OF_NIGHT - work_h, 1),
+        "cold_hours_expected": predicted["hours_below_hypothermic"],
+        "wake_hours_expected": predicted["awake_at_night_h"],
+        "core_at_morning_if_uninterrupted": predicted["morning_core_c"],
+        "expects_to_wake_cold": predicted["woke_cold"] > 0,
+        "morning_fatigue_expected": morning_fatigue,
         "day_effort_expected": round(day_effort, 1),
         "fatigue_after_trip_expected": round(projected_fatigue_after_trip, 1),
         "ready_for_tomorrow_expected": (morning_fatigue <= tomorrow.max_morning_fatigue
