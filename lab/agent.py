@@ -129,16 +129,29 @@ class Agent:
                     heapq.heappush(queue, (cost + w, nxt, route + [nxt]))
         return float("inf"), []
 
-    def choose_target(self) -> str | None:
-        best, best_score = None, 0.0
+    def rank_targets(self) -> list[dict]:
+        """Buildings the player believes still hold loot, best value first."""
+        ranked = []
         for node, loot in self.beliefs.loot.items():
             if loot <= 0:
                 continue
-            minutes, _ = self.path("home", node)
+            minutes, route = self.path("home", node)
+            if not route:
+                continue
             score = min(loot, CARRY_CAPACITY) / (2 * minutes + SEARCH_CHUNK_MIN)
-            if score > best_score:
-                best, best_score = node, score
-        return best
+            ranked.append({"node": node, "minutes": minutes, "loot": loot, "score": score})
+        return sorted(ranked, key=lambda r: -r["score"])
+
+    def choose_target(self) -> str | None:
+        ranked = self.rank_targets()
+        return ranked[0]["node"] if ranked else None
+
+    def learn_loot(self, node: str, found: int) -> str:
+        """The player only knows what it found: no access to the building's true stock."""
+        before = self.beliefs.loot.get(node, 0.0)
+        after = 0.0 if found == 0 else max(0.0, before - found)
+        self.beliefs.loot[node] = after
+        return f"оценка запасов {node}: {before:.0f}→{after:.0f}"
 
     def update_margin(self, scare: bool, on_time: bool) -> str:
         if scare:

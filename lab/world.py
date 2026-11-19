@@ -93,13 +93,17 @@ class World:
         return 0.3 + exposure * weather.wind(minute) * 2.5
 
     def roll_weather(self, rng: random.Random) -> DayWeather:
+        """Always draws four numbers, so one seed gives the same day in every variant.
+
+        Variants only move the thresholds: a day stormy in a calm variant stays stormy in a harsher one.
+        """
         r = self.weather_rules
-        storm_start = storm_end = signal_at = None
-        if rng.random() < r["storm_chance"]:
-            storm_start = rng.randint(90, self.day_length - 60)
-            storm_end = storm_start + rng.randint(60, 120)
-            if r["signal_lead_min"] > 0:
-                signal_at = storm_start - r["signal_lead_min"]
-        elif rng.random() < r["false_signal_chance"]:
-            signal_at = rng.randint(60, self.day_length - 60)
-        return DayWeather(storm_start, storm_end, signal_at)
+        u_storm, u_time, u_len, u_false = (rng.random() for _ in range(4))
+        if u_storm < r["storm_chance"]:
+            storm_start = int(90 + u_time * (self.day_length - 150))
+            storm_end = storm_start + int(60 + u_len * 60)
+            signal_at = storm_start - r["signal_lead_min"] if r["signal_lead_min"] > 0 else None
+            return DayWeather(storm_start, storm_end, signal_at)
+        if u_false < r["false_signal_chance"]:
+            return DayWeather(None, None, int(60 + u_time * (self.day_length - 120)))
+        return DayWeather(None, None, None)

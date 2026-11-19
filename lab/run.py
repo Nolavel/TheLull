@@ -21,6 +21,9 @@ def summary(records: list[DayRecord]) -> dict:
         "plan_changes": sum(r.plan_changes for r in records),
         "scares": sum(r.after_dark or r.crisis or r.caught_in_storm for r in trips),
         "cold_nights": sum(r.cold_night for r in records),
+        "travel_error_mean_min": round(mean(r.travel_error for r in trips), 1) if trips else None,
+        "decision_points": {p: sum(d.point == p for r in records for d in r.decisions)
+                            for p in ("выход", "цель", "разведка", "сигнал", "буря")},
     }
 
 
@@ -32,12 +35,25 @@ def main() -> None:
     ap.add_argument("--days", type=int, default=12)
     ap.add_argument("--seed", type=int, default=1)
     ap.add_argument("--json")
+    ap.add_argument("--decisions", action="store_true", help="print the reasoning behind each decision")
     a = ap.parse_args()
     records = run(a.world, a.variant, a.profile, a.days, a.seed)
     for r in records:
         print(f"\nДень {r.day} (топливо утром {r.fuel_morning}, запас {r.margin:.0f} мин, доверие к приметам {r.signal_trust:.0%})")
         for e in r.events:
             print("  " + e)
+        if a.decisions:
+            for d in r.decisions:
+                print(f"  ▸ {d.time} [{d.point}] хотел: {d.intention}")
+                print(f"      видел: {'; '.join(d.cues)}")
+                print("      рассматривал: " + ", ".join(
+                    f"{x['option']} ({x.get('basis') or ('~' + str(x.get('predicted_min')) + ' мин')})" for x in d.alternatives))
+                print(f"      выбрал: {d.choice} — {d.reason}")
+                if d.outcome:
+                    print(f"      итог: {d.outcome}")
+                if d.belief_update:
+                    print(f"      вера: {d.belief_update.strip('; ')}")
+            print(f"  → следующее намерение: {r.next_intention}")
     s = summary(records)
     print("\nИтог:", json.dumps(s, ensure_ascii=False))
     if a.json:

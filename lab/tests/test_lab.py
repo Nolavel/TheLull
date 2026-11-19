@@ -40,3 +40,38 @@ class LabTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class OracleAndDecisionTest(unittest.TestCase):
+    def test_same_seed_same_weather_across_variants(self):
+        from lab.world import World as W
+        calm, harsh = W.load("district_v0", "A_safe"), W.load("district_v0", "B_readable")
+        import random
+        for seed in range(30):
+            ra, rb = random.Random(seed), random.Random(seed)
+            for _ in range(8):
+                a, b = calm.roll_weather(ra), harsh.roll_weather(rb)
+                if a.storm_start is not None:
+                    self.assertEqual(a.storm_start, b.storm_start)
+                    self.assertIsNotNone(b.storm_start)
+
+    def test_agent_never_sees_true_loot(self):
+        world = World.load("district_v0", "B_readable")
+        agent = Agent("novice", world)
+        agent.beliefs.loot["house_a"] = 6.0
+        world.loot["house_a"] = 9  # truth is larger; belief must not follow it
+        agent.learn_loot("house_a", 0)
+        self.assertEqual(agent.beliefs.loot["house_a"], 0.0)
+        self.assertEqual(world.loot["house_a"], 9)
+
+    def test_trip_days_record_decisions_with_reasons(self):
+        records = run("district_v0", "B_readable", "local", 8, seed=1)
+        trips = [r for r in records if r.went_out]
+        self.assertTrue(trips)
+        for r in trips:
+            target = [d for d in r.decisions if d.point in ("цель", "разведка")]
+            self.assertEqual(len(target), 1)
+            self.assertTrue(target[0].reason)
+            self.assertTrue(target[0].alternatives)
+            self.assertTrue(target[0].outcome)
+            self.assertIsNotNone(r.travel_error)
