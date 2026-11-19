@@ -54,6 +54,8 @@ def play(option_label: str, outside_c: float, room: Room, body: Body, beliefs: E
                    f"усталость {body.fatigue:.0f}")
 
     refusal = sleep_refusal(room, body, outside_c)
+    fuel_at_ignition = room.fuel
+    fire_ignition_h = hour
     room.fire_lit = room.fuel > 0
     if refusal == "слишком холодно, чтобы ложиться" and room.fire_lit:
         # Warm the room first, as Hoarbound's sleep refusal intends: prepare, then sleep.
@@ -72,18 +74,19 @@ def play(option_label: str, outside_c: float, room: Room, body: Body, beliefs: E
     night_hours = max(0.0, HOURS_OF_NIGHT - hour)
     fire_out_at, coldest, hypo_hours = None, body.core_c, 0.0
     slept, awake_h, wakes = 0.0, 0.0, []
-    while slept + awake_h < night_hours:
+    asleep = refusal is None
+    while slept + awake_h + 1e-8 < night_hours:
         was_lit = room.fire_lit
-        asleep = True
         # Author's rule: the cold wakes the sleeper, it does not kill them in their sleep.
-        if body.core_c < WAKE_COLD_C:
+        if asleep and body.core_c < WAKE_COLD_C:
+            asleep = False
             at, woke_at_c = hour + slept + awake_h, body.core_c
             if room.fuel > 0 and not room.fire_lit:
                 room.fire_lit = True
                 wakes.append({"at": round(at, 1), "core_c": round(woke_at_c, 1), "did": "разжёг остаток дров"})
                 log.append(f"{at:4.1f} ч: проснулся от холода ({woke_at_c:.1f}°) — разжёг остаток дров")
                 asleep = False
-            elif room.furniture > 0 and room.has_axe and body.stamina >= HEAVY.stamina_cost and (
+            elif not room.fire_lit and room.furniture > 0 and room.has_axe and body.stamina >= HEAVY.stamina_cost and (
                 night_hours - slept - awake_h >= HEAVY.hours):
                 room.furniture -= 1
                 body.stamina = max(0.0, body.stamina - HEAVY.stamina_cost)
@@ -100,19 +103,16 @@ def play(option_label: str, outside_c: float, room: Room, body: Body, beliefs: E
                            f"ломает мебель в темноте, {HEAVY.hours} ч без сна")
                 continue
             else:
-                why = "нет доступного топлива или инструмента — сидит до утра"
+                why = ("печь ещё горит — ждёт, пока тело согреется" if room.fire_lit
+                       else "нет доступного топлива или инструмента — остаётся бодрствовать")
                 wakes.append({"at": round(at, 1), "core_c": round(woke_at_c, 1), "did": why})
                 log.append(f"{at:4.1f} ч: проснулся от холода ({woke_at_c:.1f}°) — {why}")
-                while slept + awake_h < night_hours:
-                    room.step(STEP_H)
-                    step_body(body, room, outside_c, STEP_H, asleep=False, fatigue_per_h=IDLE_FATIGUE_PER_H)
-                    awake_h += STEP_H
-                    coldest = min(coldest, body.core_c)
-                    if body.core_c < HYPOTHERMIC_C:
-                        hypo_hours += STEP_H
-                break
+        if not asleep and body.core_c >= WAKE_COLD_C + 0.4 and sleep_refusal(room, body, outside_c) is None:
+            asleep = True
+            log.append(f"{hour + slept + awake_h:4.1f} ч: согрелся — снова лёг")
         room.step(STEP_H)
-        step_body(body, room, outside_c, STEP_H, asleep=asleep)
+        step_body(body, room, outside_c, STEP_H, asleep=asleep,
+                  fatigue_per_h=0.0 if asleep else IDLE_FATIGUE_PER_H)
         if asleep:
             slept += STEP_H
         else:
@@ -128,7 +128,13 @@ def play(option_label: str, outside_c: float, room: Room, body: Body, beliefs: E
                f"усталость {body.fatigue:.0f}, выносливость {body.stamina:.0f}, "
                f"спал {slept:.1f} ч" + (f", не спал {awake_h:.1f} ч" if awake_h else ""))
 
-    return {"option": option_label, "slept_hours": round(slept, 1), "awake_at_night_h": round(awake_h, 1),
+    observed_burn_rate = None
+    fire_elapsed = HOURS_OF_NIGHT - fire_ignition_h
+    if room.fire_lit and not wakes and fuel_at_ignition > room.fuel and fire_elapsed > 0.25:
+        observed_burn_rate = round((fuel_at_ignition - room.fuel) / fire_elapsed, 3)
+
+    return {"option": option_label, "observed_burn_rate": observed_burn_rate,
+            "slept_hours": round(slept, 1), "awake_at_night_h": round(awake_h, 1),
             "woke_cold": len(wakes), "wake_events": wakes, "went_to_bed_at": round(hour, 1),
             "fire_out_at": round(fire_out_at, 1) if fire_out_at is not None else None,
             "hours_below_hypothermic": round(hypo_hours, 1), "coldest_core_c": round(coldest, 1),
