@@ -18,6 +18,7 @@ nothing was tuned to make the three options come out even — if one dominates, 
 from __future__ import annotations
 
 import json
+import math
 from dataclasses import dataclass, field, replace
 
 HOURS_OF_NIGHT = 10.0
@@ -203,19 +204,45 @@ def _forecast(opt: EveningOption, body: Body, room: Room, beliefs: EveningBelief
     night_h = HOURS_OF_NIGHT - work_h
     fire_h = beliefs.hours_of_fire(fuel_after)
     cooling = beliefs.cooling_rate_est * (SEAL_COOLING_FACTOR if work is SEAL else 1.0)
-    # The room does not stay liveable until it is fully cold: the body starts losing heat once the
-    # accumulated warmth drops under what the frost demands. The player judges this from its own belief
-    # about how fast the room bleeds what it gained.
+    # Cooling starts when the room drops below *comfort*, but this does NOT
+    # mean the body instantly wakes. Predict core-temperature loss by integrating
+    # the cooling deficit, using the agent's *estimated* room / burn rates.
+    # Hoarbound's ThermalManager likewise has thermal inertia; this forecast
+    # remains approximate, not an oracle for the actual night.
     hours_after_fire = max(0.0, night_h - fire_h)
-    needed = max(0.0, COMFORT_C - CLOTHING_INSULATION_C - BASAL_HEAT_C - PASSIVE_OFFSET_C - outside_c)
-    warm_tail_h = max(0.0, (MAX_HEATED_OFFSET_C - needed) / max(0.5, cooling))
+    peak_offset = min(MAX_HEATED_OFFSET_C, room.heated_offset_c + HEATING_RATE_C_PER_H * fire_h)
+    needed = COMFORT_C - CLOTHING_INSULATION_C - BASAL_HEAT_C - PASSIVE_OFFSET_C - outside_c
+    warm_tail_h = max(0.0, (peak_offset - needed) / max(0.1, cooling))
     cold_h = max(0.0, hours_after_fire - warm_tail_h)
-    expects_to_wake = cold_h > 0.5
+    initial_deficit = max(0.0, needed - peak_offset)
+    deficit_area = initial_deficit * hours_after_fire + 0.5 * cooling * cold_h * cold_h
+    work_deficit = max(0.0, needed - room.heated_offset_c)
+    core_after_work = body.core_c - work_deficit * COOLING_COEF * work_h
+    source_effective = (outside_c + PASSIVE_OFFSET_C + peak_offset
+                        + HEAT_SOURCE_OFFSET_C + CLOTHING_INSULATION_C + BASAL_HEAT_C)
+    rewarm = max(0.0, source_effective - COMFORT_C) * REWARM_COEF * min(fire_h, 2.0)
+    core_when_fire_dies = min(START_CORE_C, core_after_work + rewarm)
+    predicted_core_end = core_when_fire_dies - COOLING_COEF * deficit_area
+
+    if predicted_core_end >= WAKE_COLD_C or hours_after_fire <= 0:
+        awake_expected = 0.0
+    else:
+        # Solve core loss(t) == available thermal reserve, without reading
+        # weather.storm_end or the actual outcome. All inputs are beliefs.
+        reserve = max(0.0, core_when_fire_dies - WAKE_COLD_C)
+        rate = max(0.1, cooling)
+        if initial_deficit > 0.0:
+            t_until_wake = (-initial_deficit +
+                            math.sqrt(initial_deficit ** 2 + 2 * rate * reserve / COOLING_COEF)) / rate
+        else:
+            t_until_wake = warm_tail_h + math.sqrt(2 * reserve / (COOLING_COEF * rate))
+        awake_expected = max(0.0, hours_after_fire - t_until_wake)
+
+    expects_to_wake = awake_expected > 0.0
     fatigue_after_work = body.fatigue + (work.fatigue_per_h * work_h if work else 0.0)
-    # Waking up cold ends the night's sleep; what is left is spent awake, not resting.
-    slept_h = night_h - cold_h if expects_to_wake else night_h
+    slept_h = max(0.0, night_h - awake_expected)
     morning_fatigue = max(0.0, fatigue_after_work - beliefs.recovery_est * slept_h
-                          + (2.0 * cold_h if expects_to_wake else 0.0))
+                          + 2.0 * awake_expected)
     # Simplified next-day effort (NOT simulated walking yet).
     # Both the chosen plan and the load affect the predicted reserve.
     day_effort = tomorrow.hours_out * (3.0 + 0.9 * tomorrow.load)
@@ -228,6 +255,8 @@ def _forecast(opt: EveningOption, body: Body, room: Room, beliefs: EveningBelief
         "fire_hours_expected": round(fire_h, 1),
         "night_hours": round(night_h, 1),
         "cold_hours_expected": round(cold_h, 1),
+        "wake_hours_expected": round(awake_expected, 2),
+        "core_at_morning_if_uninterrupted": round(predicted_core_end, 2),
         "expects_to_wake_cold": expects_to_wake,
         "morning_fatigue_expected": round(morning_fatigue, 1),
         "day_effort_expected": round(day_effort, 1),
@@ -264,7 +293,8 @@ def choose(body: Body, room: Room, beliefs: EveningBeliefs, tomorrow: Tomorrow,
 
     def opportunity_cost(o: dict) -> float:
         # Waking cold is disruptive, even if later intervention averts a bad morning.
-        cold = o["cold_hours_expected"] * 12.0 + (5.0 if o["expects_to_wake_cold"] else 0.0)
+        # Mild cooling is not the same as interrupted sleep: use *predicted wakes*.
+        cold = o["wake_hours_expected"] * 12.0 + (5.0 if o["expects_to_wake_cold"] else 0.0)
         # Fatigue is more expensive before a demanding day; short tasks tolerate it.
         future = max(0.0, o["fatigue_after_trip_expected"] - 80.0) * 1.7
         unready = max(0.0, o["morning_fatigue_expected"] - tomorrow.max_morning_fatigue) * 1.0
