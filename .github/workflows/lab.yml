@@ -49,11 +49,13 @@ jobs:
           echo >> "$GITHUB_STEP_SUMMARY"
           python3 -m lab.linked_days --paired --fuel 5 --temp -12 --json lab-results/linked_paired.json >> /dev/null
           python3 -m lab.linked_days --sweep --json lab-results/linked_sweep.json >> /dev/null
-          python3 - <<'PY' >> "$GITHUB_STEP_SUMMARY"
+          python3 - <<'PY' | tee -a "$GITHUB_STEP_SUMMARY"
           import json
           from pathlib import Path
           result = json.loads(Path("lab-results/linked_sweep.json").read_text(encoding="utf-8"))
           print(f"**План изменил вечер:** {result['different_plan_changes_evening']} / {result['cells']} клеток.")
+          for x in result['examples'][:6]:
+              print(f"- {x['temp']} °C, дров {x['fuel']}, восстановление {x['recovery']}: {list(x['choices'].values())}")
           print("Это наблюдения модели, не измерение интереса игроков.")
           PY
 
