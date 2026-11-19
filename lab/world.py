@@ -92,6 +92,12 @@ class World:
     def warmth_loss_per_min(self, exposure: float, minute: float, weather: DayWeather) -> float:
         return 0.3 + exposure * weather.wind(minute) * 2.5
 
+    def wait_loss_per_min(self, node: str, minute: float, weather: DayWeather) -> float:
+        """Waiting is not free, and a waypoint is not a heated room."""
+        kind = self.nodes[node]["kind"]
+        shield = {"shelter": 0.0, "building": 0.35, "waypoint": 0.8}.get(kind, 0.8)
+        return 0.3 + shield * weather.wind(minute) * 1.2
+
     def roll_weather(self, rng: random.Random) -> DayWeather:
         """Always draws four numbers, so one seed gives the same day in every variant.
 

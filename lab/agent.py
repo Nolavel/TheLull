@@ -20,6 +20,7 @@ PROFILES = {
         "signal_prior": (1, 3),
         "margin_min": 20,
         "knows_storms_pass": False,
+        "storm_duration_est": None,
     },
     # Lives here: knows the streets and the shed, reads the sky, keeps a margin.
     "local": {
@@ -30,6 +31,7 @@ PROFILES = {
         "signal_prior": (3, 1),
         "margin_min": 45,
         "knows_storms_pass": True,
+        "storm_duration_est": 90.0,
     },
 }
 
@@ -49,6 +51,7 @@ class Beliefs:
     signal_hits: float = 1.0
     signal_misses: float = 1.0
     knows_storms_pass: bool = False
+    storm_duration_est: float | None = None  # what the player believes, never the world's truth
 
     def signal_trust(self) -> float:
         return self.signal_hits / (self.signal_hits + self.signal_misses)
@@ -60,7 +63,8 @@ class Agent:
         self.profile = profile
         self.margin = float(p["margin_min"])
         self.base_margin = float(p["margin_min"])
-        self.beliefs = Beliefs(knows_storms_pass=p["knows_storms_pass"])
+        self.beliefs = Beliefs(knows_storms_pass=p["knows_storms_pass"],
+                               storm_duration_est=p["storm_duration_est"])
         self.visited: set[str] = set()
         self.beliefs.signal_hits, self.beliefs.signal_misses = map(float, p["signal_prior"])
         known = world.edges if p["known_edges"] == "all" else [world.edge(a, b) for a, b in p["known_edges"]]
@@ -103,10 +107,24 @@ class Agent:
         return predicted
 
     def observe_signal(self, storm_followed: bool) -> None:
+        """Only call this when the player could actually see the outcome."""
         if storm_followed:
             self.beliefs.signal_hits += 1
         else:
             self.beliefs.signal_misses += 1
+
+    def observe_storm_duration(self, minutes: float) -> str:
+        """A storm the player sat through or walked through teaches how long they last."""
+        before = self.beliefs.storm_duration_est
+        self.beliefs.storm_duration_est = minutes if before is None else (1 - EMA) * before + EMA * minutes
+        self.beliefs.knows_storms_pass = True
+        was = f"{before:.0f}" if before is not None else "неизвестно"
+        return f"представление о длине бури: {was}→{self.beliefs.storm_duration_est:.0f} мин"
+
+    def expected_storm_left(self, waited: float) -> float:
+        """How much longer the player *thinks* the storm will last. Never reads the world."""
+        est = self.beliefs.storm_duration_est or 90.0
+        return max(0.0, est - waited)
 
     # --- planning --------------------------------------------------------
     def path(self, start: str, goal: str, storm: bool = False) -> tuple[float, list[str]]:

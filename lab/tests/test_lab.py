@@ -90,3 +90,48 @@ class PairedConditionsTest(unittest.TestCase):
         for seed in range(1, 6):
             for r in run("district_v0", "B_readable", "local", 8, seed, signals_visible=False):
                 self.assertFalse([d for d in r.decisions if d.point == "сигнал"])
+
+
+class ObservableLearningTest(unittest.TestCase):
+    def test_no_learning_from_a_storm_after_dark(self):
+        from lab.sim import DayWeather, run_day
+        world = World.load("district_v0", "B_readable")
+        agent = Agent("local", world)
+        before = agent.beliefs.signal_trust()
+        # Sign at midday, storm only after the day ends: the player sleeps through it.
+        weather = DayWeather(storm_start=world.day_length + 30, storm_end=world.day_length + 120,
+                             signal_at=120)
+        import random
+        rec, _ = run_day(world, agent, weather, random.Random(0), 1, 0)
+        sig = [d for d in rec.decisions if d.point == "сигнал"]
+        if sig:
+            self.assertEqual(agent.beliefs.signal_trust(), before)
+            self.assertIn("не видел", sig[0].outcome)
+
+    def test_agent_does_not_know_when_the_storm_ends(self):
+        from lab.sim import DayWeather, run_day
+        world = World.load("district_v0", "B_readable")
+        agent = Agent("local", world)
+        agent.beliefs.storm_duration_est = 30.0  # believes storms are short
+        import random
+        # A storm far longer than the belief: the player must give up waiting, not sit it out exactly.
+        weather = DayWeather(storm_start=0, storm_end=world.day_length, signal_at=None)
+        rec, _ = run_day(world, agent, weather, random.Random(0), 1, 0)
+        self.assertFalse(rec.waited_out_storm)
+
+    def test_storm_duration_is_learned_not_given(self):
+        world = World.load("district_v0", "B_readable")
+        agent = Agent("novice", world)
+        self.assertIsNone(agent.beliefs.storm_duration_est)
+        agent.observe_storm_duration(80.0)
+        self.assertEqual(agent.beliefs.storm_duration_est, 80.0)
+        agent.observe_storm_duration(120.0)
+        self.assertGreater(agent.beliefs.storm_duration_est, 80.0)
+        self.assertLess(agent.beliefs.storm_duration_est, 120.0)
+
+    def test_waiting_in_a_waypoint_costs_more_than_at_home(self):
+        from lab.sim import DayWeather
+        world = World.load("district_v0", "B_readable")
+        storm = DayWeather(0, 200, None)
+        self.assertGreater(world.wait_loss_per_min("shed", 10, storm),
+                           world.wait_loss_per_min("home", 10, storm))

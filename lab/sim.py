@@ -15,6 +15,7 @@ from .world import DayWeather, World
 
 DEPART_MIN = 60
 INDOOR_LOSS_PER_MIN = 0.3
+WAIT_CHUNK_MIN = 15  # the player re-decides this often while waiting out a storm
 LOOT_PER_CHUNK = 1.5  # what the player expects from one search chunk
 
 
@@ -49,6 +50,8 @@ class DayRecord:
     after_dark: bool = False
     crisis: bool = False
     min_warmth: float = 100.0
+    waited_out_storm: bool = False
+    storm_observed: bool = False  # the player saw for itself whether a storm came
     storm_start: int | None = None  # weather truth, recorded for experiment checks
     storm_end: int | None = None
     cold_night: bool = False
@@ -137,6 +140,7 @@ def run_day(world: World, agent: Agent, weather: DayWeather, lrng: random.Random
     noticed = False
     returning = False
     sig = {"dec": None}
+    storm_met: dict[str, float | None] = {"at": None}
     storm_dec = None
 
     def check_signal() -> None:
@@ -198,28 +202,54 @@ def run_day(world: World, agent: Agent, weather: DayWeather, lrng: random.Random
         edge = world.edge(node, nxt)
 
         if storm_now and edge.exposure > 0.5 and node != "home" and storm_dec is None:
+            est = agent.beliefs.storm_duration_est
             knows = agent.beliefs.knows_storms_pass
             storm_dec = Decision(
                 clock(now), "буря", "дойти до следующего места",
-                [f"ветер {weather.wind(now):.1f}, открытая улица {node}→{nxt}"],
+                [f"ветер {weather.wind(now):.1f}, открытая улица {node}→{nxt}",
+                 f"укрытие здесь: {world.nodes[node]['kind']}"],
                 [{"option": f"переждать в {node}",
-                  "basis": "знает, что буря проходит" if knows else "не знает, как долго она продлится"},
-                 {"option": "идти дальше", "basis": "маршрут короче"}],
+                  "basis": (f"думает, что бури длятся около {est:.0f} мин" if est is not None
+                            else ("знает, что бури проходят, но не знает сколько длятся" if knows
+                                  else "не знает, сколько длится буря"))},
+                 {"option": "идти дальше", "basis": "маршрут короче, но улица открыта"}],
                 "переждать" if knows else "идти",
-                "знает, что буря проходит — лучше переждать в укрытии" if knows
-                else "не знает, что буря скоро кончится — идёт дальше")
+                "рассчитывает, что буря скоро кончится" if knows
+                else "не знает, когда кончится буря — идёт дальше")
             rec.decisions.append(storm_dec)
             if knows:
-                wait = weather.storm_end - now
-                now = float(weather.storm_end)
-                warmth -= INDOOR_LOSS_PER_MIN * wait
+                # The player does not know storm_end: it waits in chunks and keeps re-deciding.
+                waited, gave_up = 0.0, False
+                while weather.is_storm(now):
+                    home_cost = agent.path(node, "home", storm=True)[0]
+                    if agent.expected_storm_left(waited) <= 0:
+                        gave_up = True
+                        rec.events.append(f"{clock(now)} буря длится дольше, чем он ожидал — выходит в неё")
+                        break
+                    if warmth < 35 or now + WAIT_CHUNK_MIN + home_cost + agent.margin > world.day_length:
+                        gave_up = True
+                        rec.events.append(f"{clock(now)} ждать больше нельзя: "
+                                          + ("мёрзнет" if warmth < 35 else "темнеет") + " — выходит в бурю")
+                        break
+                    now += WAIT_CHUNK_MIN
+                    waited += WAIT_CHUNK_MIN
+                    warmth -= world.wait_loss_per_min(node, now, weather) * WAIT_CHUNK_MIN
+                rec.min_warmth = min(rec.min_warmth, warmth)
                 rec.plan_changes += 1
-                storm_dec.outcome = f"ждал {wait:.0f} мин, буря прошла"
-                rec.events.append(f"пережидает бурю в {node} {wait:.0f} мин, вместо открытой улицы")
-                continue
+                rec.waited_out_storm = not gave_up
+                storm_dec.outcome = (f"ждал {waited:.0f} мин, буря прошла" if not gave_up
+                                     else f"ждал {waited:.0f} мин и всё равно пошёл в бурю")
+                rec.events.append(f"{clock(now)} переждал в {node} {waited:.0f} мин"
+                                  if not gave_up else f"{clock(now)} выходит из {node} в бурю")
+                if not gave_up:
+                    storm_dec.belief_update = agent.observe_storm_duration(waited)
+                    rec.storm_observed = True
+                    continue
 
         minutes = world.travel_minutes(edge, now, weather)
         if storm_now:
+            if not rec.caught_in_storm:
+                storm_met["at"] = now  # first contact: all it can judge the length from
             rec.caught_in_storm = True
             if storm_dec is not None and not storm_dec.outcome:
                 storm_dec.outcome = f"шёл открытой улицей {minutes:.0f} мин"
@@ -241,13 +271,27 @@ def run_day(world: World, agent: Agent, weather: DayWeather, lrng: random.Random
             carried, now = 0, now + 30
             break
 
+    # What the player may learn about the sign: only what it could witness.
+    # Daylight at home counts (a storm is visible and audible from a window); after dark, asleep, it does not.
+    if weather.storm_start is not None and weather.storm_start < world.day_length:
+        rec.storm_observed = True
     if rec.caught_in_storm:
-        agent.beliefs.knows_storms_pass = True
+        rec.storm_observed = True
+        # Walking through a storm teaches that they end, and roughly how long — but only the part it lived
+        # through, measured from first contact. An early estimate is honestly too short.
+        if weather.storm_end is not None and weather.storm_end < world.day_length and storm_met["at"] is not None:
+            rec.events.append(agent.observe_storm_duration(weather.storm_end - storm_met["at"]))
+        else:
+            agent.beliefs.knows_storms_pass = True
     if noticed and sig["dec"] is not None:
-        before = agent.beliefs.signal_trust()
-        agent.observe_signal(weather.storm_start is not None)
-        sig["dec"].outcome = "буря пришла" if weather.storm_start is not None else "буря не пришла"
-        sig["dec"].belief_update = f"доверие к приметам {before:.0%}→{agent.beliefs.signal_trust():.0%}"
+        if rec.storm_observed or weather.storm_start is None:
+            before = agent.beliefs.signal_trust()
+            agent.observe_signal(weather.storm_start is not None and rec.storm_observed)
+            sig["dec"].outcome = "буря пришла" if rec.storm_observed else "буря не пришла"
+            sig["dec"].belief_update = f"доверие к приметам {before:.0%}→{agent.beliefs.signal_trust():.0%}"
+        else:
+            sig["dec"].outcome = "буря началась после темноты — он этого не видел"
+            sig["dec"].belief_update = "ничего не узнал: исход прогноза остался неизвестным"
 
     rec.actual_return, rec.carried = now, carried
     rec.after_dark = now > world.day_length
