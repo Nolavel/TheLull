@@ -83,6 +83,13 @@ def audit(candidate: Path) -> dict:
           "recovered_pre_night" not in bridge and "legacy_fuel_after_night" not in bridge,
           "legacy _night bill must be removed instead of reversed by a temporary bridge")
 
+    night_fn = getattr(sim, "_night", None)
+    night_has_body = night_fn is None or "body" in inspect.signature(night_fn).parameters
+    check("night_affects_shared_body",
+          night_has_body,
+          "sim._night has access to lab.body.Body: " + str(night_has_body) +
+          "; a flat fuel-only night cannot alter fatigue or core temperature")
+
     check("no_second_fatigue_charge",
           "activity_h * 5.0" not in bridge,
           "day now charges shared Body; adapter's heuristic must disappear")
@@ -132,14 +139,25 @@ def audit(candidate: Path) -> dict:
 
     summary = collections.Counter()
     days_by_variant = collections.defaultdict(list)
+    end_body_by_variant = collections.defaultdict(list)
+    cold_streak_ended_while_warm = 0
     for variant in ("A_safe", "B_readable", "C_unreadable"):
         for profile in ("novice", "local"):
             for seed in range(1, 31):
-                records = sim.run("district_v0", variant, profile, 30, seed)
+                end_body = body.Body()
+                records = sim.run("district_v0", variant, profile, 30, seed, body=end_body)
                 reason = records[-1].run_end_reason or "30-day horizon"
                 summary[reason] += 1
                 days_by_variant[variant].append(len(records))
+                end_body_by_variant[variant].append(end_body.core_c)
+                if reason == "три ночи без огня подряд" and end_body.core_c >= body.HYPOTHERMIC_C:
+                    cold_streak_ended_while_warm += 1
     metrics["run_end_reasons"] = dict(summary)
+    metrics["cold_streak_end_with_core_above_hypothermic"] = cold_streak_ended_while_warm
+    metrics["end_core_by_variant"] = {
+        k: {"min": round(min(v), 3), "max": round(max(v), 3)}
+        for k, v in end_body_by_variant.items()
+    }
     metrics["run_lengths"] = {
         k: {"min": min(v), "max": max(v),
             "mean": round(sum(v) / len(v), 2)} for k, v in days_by_variant.items()
@@ -147,6 +165,11 @@ def audit(candidate: Path) -> dict:
     check("outcome_not_single_fixed_failure",
           len(summary) > 1,
           "180 runs / 3 variants / 2 profiles / 30 seeds; reasons: " + str(dict(summary)),
+          "research_signal")
+    check("cold_streak_ending_is_a_proxy_not_physical_depletion",
+          cold_streak_ended_while_warm == 0,
+          f"{cold_streak_ended_while_warm} runs terminated after three fuel-less nights "
+          f"with core >= {body.HYPOTHERMIC_C} C (sim._night does not cool shared Body)",
           "research_signal")
 
     return {
