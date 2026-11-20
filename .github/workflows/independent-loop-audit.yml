@@ -1,0 +1,78 @@
+# Read-only candidate gate: do NOT write to Claude's or Codex's branch.
+# This job is expected to be red until their owned systems are integrated.
+name: independent-loop-audit
+
+on:
+  push:
+    branches:
+      - production
+    paths:
+      - "tools/audit/**"
+      - ".github/workflows/independent-loop-audit.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  independent-audit:
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Fetch published auditor
+        uses: actions/checkout@v4
+        with:
+          ref: production
+          path: auditor
+      - name: Fetch candidate code (read-only)
+        uses: actions/checkout@v4
+        with:
+          ref: ue-claudeflow
+          path: candidate
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Record actual candidate revision
+        run: |
+          echo "### Audited revision" >> "$GITHUB_STEP_SUMMARY"
+          git -C candidate rev-parse HEAD | tee -a "$GITHUB_STEP_SUMMARY"
+      - name: Candidate unit and owner contract tests
+        working-directory: candidate
+        run: python3 -m unittest discover -s lab/tests -t .
+      - name: Independent runtime and resource probes
+        run: |
+          mkdir -p audit-results
+          python3 auditor/tools/audit/thelull_contract_probe.py --candidate candidate --out audit-results/contract-report.json | tee audit-results/audit-log.txt
+      - name: Summarize blocked contracts
+        run: |
+          python3 - <<'PY' | tee -a "$GITHUB_STEP_SUMMARY"
+          import json
+          with open("audit-results/contract-report.json", encoding="utf-8") as f:
+              result = json.load(f)
+          print("\n### Independent integration contracts\n")
+          print("| Contract | Result | Evidence |")
+          print("|---|---|---|")
+          for row in result["findings"]:
+              details = row["evidence"].replace("|", "\\|").replace("\n", " ")
+              print(f"| {row['contract']} | {row['status']} | {details} |")
+          print("\n### Observed run endings\n")
+          print(result["metrics"]["run_end_reasons"])
+          print("\n**Red means incomplete integration, not a failed Python unit suite.**")
+          PY
+      - name: Persist auditable evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: independent-loop-contracts
+          path: audit-results/
+      - name: Integration gate
+        run: |
+          python3 - <<'PY'
+          import json
+          with open("audit-results/contract-report.json", encoding="utf-8") as f:
+              report = json.load(f)
+          blocking = [x["contract"] for x in report["findings"]
+                      if x["status"] == "BLOCKED" and x["group"] != "research_signal"]
+          if blocking:
+              raise SystemExit("Not integrated: " + ", ".join(blocking))
+          print("Owner contracts and integration probes passed.")
+          PY
