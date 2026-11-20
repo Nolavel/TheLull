@@ -23,11 +23,11 @@ jobs:
         run: |
           mkdir -p loop-audit
           python3 -m lab.diagnose_evening --brief --json loop-audit/evening-grid.json > loop-audit/evening-summary.json
-          cat loop-audit/evening-summary.json >> "$GITHUB_STEP_SUMMARY"
+          cat loop-audit/evening-summary.json | tee -a "$GITHUB_STEP_SUMMARY"
       - name: Linked gameplay probe (60 seeds x 7 days)
         run: |
           python3 -m lab.loop_bridge --seeds 60 --days 7 --json loop-audit/linked.json > /dev/null
-          python3 -c 'import json; x=json.load(open("loop-audit/linked.json")); print("\\n## Connected day/evening results\\n"); print("\\n".join(f"- {k}: {v}" for k,v in x.items() if k not in ("one_example","limits")))' >> "$GITHUB_STEP_SUMMARY"
+          python3 -c 'import json; x=json.load(open("loop-audit/linked.json")); print("\\n## Connected day/evening results\\n"); print("\\n".join(f"- {k}: {v}" for k,v in x.items() if k not in ("one_example","limits")))' | tee -a "$GITHUB_STEP_SUMMARY"
       - uses: actions/upload-artifact@v4
         with:
           name: gameplay-loop-audit
