@@ -7,9 +7,15 @@ on:
     branches:
       - production
     paths:
+      - "lab/**"
       - "tools/audit/**"
       - ".github/workflows/independent-loop-audit.yml"
   workflow_dispatch:
+    inputs:
+      candidate_ref:
+        description: "GitHub ref with candidate world/evening code (e.g. ue-claudeflow or production)"
+        required: false
+        default: "ue-claudeflow"
 
 permissions:
   contents: read
@@ -26,7 +32,7 @@ jobs:
       - name: Fetch candidate code (read-only)
         uses: actions/checkout@v4
         with:
-          ref: ue-claudeflow
+          ref: ${{ inputs.candidate_ref || 'ue-claudeflow' }}
           path: candidate
       - uses: actions/setup-python@v5
         with:
