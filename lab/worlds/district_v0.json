@@ -1,23 +1,75 @@
 {
-  "description": "Abstract district v0: home shelter, a shed halfway, two houses. Numbers are placeholders, not balance.",
-  "day_length_min": 540,
+  "description": "Abstract district v0: home shelter, a shed halfway, two houses. 24-hour clock: daylight 08:00-18:00. Numbers are placeholders, not balance.",
+  "day_length_min": 1080,
+  "dawn_min": 480,
+  "air_temp_c": -12.0,
   "fuel_per_night": 3,
   "start_fuel": 2,
   "nodes": {
-    "home":   {"kind": "shelter", "warm": true},
-    "shed":   {"kind": "waypoint", "warm": false},
-    "house_a": {"kind": "building", "loot": 6},
-    "house_b": {"kind": "building", "loot": 10}
+    "home": {
+      "kind": "shelter",
+      "warm": true
+    },
+    "shed": {
+      "kind": "waypoint",
+      "warm": false
+    },
+    "house_a": {
+      "kind": "building",
+      "loot": 6
+    },
+    "house_b": {
+      "kind": "building",
+      "loot": 10
+    }
   },
   "edges": [
-    {"a": "home",  "b": "house_a", "length_m": 200, "exposure": 0.9},
-    {"a": "home",  "b": "shed",    "length_m": 140, "exposure": 0.3},
-    {"a": "shed",  "b": "house_a", "length_m": 110, "exposure": 0.2},
-    {"a": "shed",  "b": "house_b", "length_m": 260, "exposure": 0.8}
+    {
+      "a": "home",
+      "b": "house_a",
+      "length_m": 200,
+      "exposure": 0.9
+    },
+    {
+      "a": "home",
+      "b": "shed",
+      "length_m": 140,
+      "exposure": 0.3
+    },
+    {
+      "a": "shed",
+      "b": "house_a",
+      "length_m": 110,
+      "exposure": 0.2
+    },
+    {
+      "a": "shed",
+      "b": "house_b",
+      "length_m": 260,
+      "exposure": 0.8
+    }
   ],
   "variants": {
-    "A_safe":        {"storm_chance": 0.10, "signal_lead_min": 60, "false_signal_chance": 0.0, "loot_scale": 2.0},
-    "B_readable":    {"storm_chance": 0.45, "signal_lead_min": 40, "false_signal_chance": 0.2, "loot_scale": 1.0},
-    "C_unreadable":  {"storm_chance": 0.60, "signal_lead_min": 0,  "false_signal_chance": 0.3, "loot_scale": 0.6}
+    "A_safe": {
+      "storm_chance": 0.1,
+      "signal_lead_min": 60,
+      "false_signal_chance": 0.0,
+      "loot_scale": 2.0,
+      "air_temp_offset_c": 6.0
+    },
+    "B_readable": {
+      "storm_chance": 0.45,
+      "signal_lead_min": 40,
+      "false_signal_chance": 0.2,
+      "loot_scale": 1.0,
+      "air_temp_offset_c": 0.0
+    },
+    "C_unreadable": {
+      "storm_chance": 0.6,
+      "signal_lead_min": 0,
+      "false_signal_chance": 0.3,
+      "loot_scale": 0.6,
+      "air_temp_offset_c": -6.0
+    }
   }
 }

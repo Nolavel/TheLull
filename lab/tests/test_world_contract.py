@@ -142,3 +142,55 @@ class DecisionRecordContract(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class ContinuityContract(unittest.TestCase):
+    """The four contracts the author approved on 20.11.2026. Breaking one breaks the loop itself."""
+
+    def test_the_day_and_the_night_make_a_whole_day(self):
+        for variant in VARIANTS:
+            world = World.load(WORLD, variant)
+            self.assertAlmostEqual(world.daylight_hours + world.night_hours, 24.0, places=6)
+
+    def test_the_clock_is_absolute_and_departure_follows_dawn(self):
+        world = World.load(WORLD, "B_readable")
+        for seed in range(1, 5):
+            for r in run(WORLD, "B_readable", "local", 6, seed):
+                if r.went_out:
+                    self.assertGreaterEqual(r.actual_return, world.dawn_min)
+                    self.assertLess(r.actual_return, 24 * 60 + world.dawn_min)
+
+    def test_the_body_is_not_reset_at_dawn(self):
+        """The hole that made every night meaningless: warmth went back to full each morning."""
+        from lab.body import Body, step_core
+        world = World.load(WORLD, "C_unreadable")
+        body = Body()
+        step_core(body, -30.0, 6.0)  # a bad night before the run starts
+        chilled = body.core_c
+        self.assertLess(chilled, 37.0)
+        run(WORLD, "C_unreadable", "local", 3, seed=2, body=body)
+        self.assertNotEqual(body.core_c, 37.0, "тело сбросилось к норме — непрерывность потеряна")
+
+    def test_one_memory_carries_both_the_street_and_the_stove(self):
+        world = World.load(WORLD, "B_readable")
+        beliefs = Agent("local", world).beliefs
+        for field in ("edge_minutes", "loot", "signal_hits", "storm_duration_est",
+                      "cooling_rate_est", "burn_rate_est", "recovery_est"):
+            self.assertTrue(hasattr(beliefs, field), f"память разошлась: нет {field}")
+
+    def test_a_run_ends_with_a_stated_reason(self):
+        """Resources are finite and do not come back, so a run must be able to end and say why."""
+        ended = []
+        for seed in range(1, 16):
+            records = run(WORLD, "C_unreadable", "novice", 30, seed)
+            last = records[-1]
+            if last.run_end_reason:
+                ended.append(last.run_end_reason)
+                self.assertLess(len(records), 30, "прогон объявлен оконченным, но продолжался")
+        self.assertTrue(ended, "ни один прогон из 15 не закончился — условие конца не работает")
+        self.assertTrue(all(r for r in ended))
+
+    def test_an_exposed_street_in_a_storm_is_colder_than_being_indoors(self):
+        world = World.load(WORLD, "B_readable")
+        storm = type("W", (), {"wind": staticmethod(lambda m: STORM_WIND)})()
+        self.assertLess(world.felt_outdoors_c(0.9, 600, storm), world.felt_outdoors_c(0.15, 600, storm))
