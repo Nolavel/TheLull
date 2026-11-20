@@ -125,6 +125,10 @@
 
 ## Шаг 8. Крошечный тест (и только он)
 
+Строй **по трафарету** `docs/blueprints/BP_LogicTest.md`, а не на глаз. Формат и правила —
+`docs/blueprints/README.md`. Не можешь воспроизвести шаг (нет узла, другое имя пина) — не выдумывай
+замену: запиши расхождение и спроси автора.
+
 1. `Content/Tests/BP_LogicTest` (Actor), переменная `bIsCold` (Boolean).
 2. Граф: `BeginPlay → Branch(bIsCold) → True: Print String "Cold" / False: Print String "Warm"`.
 3. Сохрани, закоммить и запушь в `ue-claudeflow`.
