@@ -7,6 +7,10 @@
 
 ## Unreleased
 
+### Fixed (F00 stencil review, 21.11.2026)
+
+- Revised F00 dependency set after Claude Cloud AI Talk #3 review (10 findings): Float double subtype, explicit new/load initialization, enum and cached phase, private time owner, actual duplicate check, target-based bounded steps, derived interval duration, logged rejection, cleanup. Expanded probe with latched assertions and negative tests; map startup contract updated. Source docs served 5.8/5.9 marked; editor precision/MCP/PIE not yet verified. Codex / ue-codex; pending Cloud re-review, production untouched.
+
 ### Clarification (production: Cloud pre-review / Local setup, 21.11.2026)
 
 - Утверждено автором: UE 5.8.4 установлен, MCP не настроен, UE-проект не создан; настройку MCP и создание Third Person Blueprint проекта выполняет Claude Local. Инспекция редактора ещё не проведена.

@@ -1,163 +1,139 @@
-# BP_SurvivalWorld — единый clock и диспетчер шагов
+# BP_SurvivalWorld — единый clock и dispatcher
 
-**Mirror:** `docs/blueprints/project/Content/Survival/Time/BP_SurvivalWorld.md` → **real project target:** `<ProjectRoot>/Content/Survival/Time/BP_SurvivalWorld.uasset`.
-**Builder:** Claude Code + Unreal MCP в открытом UE 5.8.4; прежде чем запускать, проверять доступные MCP-операции и [Epic Blueprint API 5.8](https://dev.epicgames.com/documentation/en-us/unreal-engine/BlueprintAPI). Это не `.uasset`.
-**Контроль:** compile/save/inspect actual nodes + указанная ниже проверка; затем обновление [build backlog](../../../BACKLOG.md) в ветке Claude, если были расхождения.
-**Статус: `stencil drafted`, 21.11.2026.** Это инструкция для реального Blueprint; в UE ещё не собиралось, названия пинов проверить в версии 5.8.4. Один файл = один Blueprint.
-
-```text
 Package: /Game/Survival/Time/BP_SurvivalWorld
 AssetType: Blueprint Class
+Mirror: `docs/blueprints/project/Content/Survival/Time/BP_SurvivalWorld.md` → `<ProjectRoot>/Content/Survival/Time/BP_SurvivalWorld.uasset`.
+**Статус: revised draft, 21.11.2026; NEEDS RE-REVIEW.** Не создан в UE. Точный тип/пин и операции MCP подтвердить локально в UE 5.8.4; [backlog](../../../BACKLOG.md). Ревью [Claude Cloud #3](https://github.com/Nolavel/TheLull/issues/3#issuecomment-7059415969).
+
 ParentClass: Actor
-DependsOn: ST_SimStep, BPI_SimStepReceiver, Gameplay Tags settings
-PlacedIn: /Game/Maps/L_KeyWestBlockout (ровно 1 instance)
-```
+DependsOn: ST_SimStep, E_SimPhase, BPI_SimStepReceiver, Gameplay Tags settings
+PlacedIn: /Game/Maps/L_KeyWestBlockout (1 instance, persistent level, no runtime spawn in F00).
 
-## Почему именно он первый
-
-Все действия (идти, искать, разбирать, топить, спать) будут платить **одному** владельцу времени. Он не знает экономику ресурсов и баланс физиологии. Системы получают один и тот же интервал в **порядке фаз**, а не обмениваются Event Tick. Без этого переход к F01/F02 даст двойное начисление времени или разные температуры одной ночи.
-
-## Пошаговая сборка в редакторе UE 5.8.4
-
-1. Создать `/Game/Survival/Time/` и ассеты `ST_SimStep`, `BPI_SimStepReceiver` по собственным трафаретам. Project Settings → Gameplay Tags → Manage Gameplay Tags: добавить `Time.Advance.Debug`, `Time.Advance.Realtime`, `Time.Advance.Action`, `Time.Advance.Sleep`.
-2. Content Browser → Blueprint Class → Actor → `BP_SurvivalWorld`. Compile/Save.
-3. В Class Defaults: выключить `Start with Tick Enabled`. **Event Tick не реализовывать.**
-4. Создать переменные и функции ниже; затем Graph; Compile/Save.
-5. Разместить ровно один BP_SurvivalWorld на уже созданной карте `/Game/Maps/L_KeyWestBlockout` после F−1; отдельную пустую карту не создавать.
+## Создание
+Собрать зависимости сначала. Blueprint Class → Actor. Start with Tick Enabled=false; нет Event Tick. Разместить один экземпляр в persistent level. Все clock writers ниже — **функции**, не Custom Events в общем графе. Actor BeginPlay не назначает время: уровень вызывает явный InitializeNewGame, а при загрузке вместо него вызывается RestoreWorldTime. До начала F05 SaveGame не существует, тест восстановления пользуется явным вызовом. Нет автоматического реального времени в F00.
 
 ## Variables
+Все runtime variables Private=true, Instance Editable=false, Expose on Spawn=false, Replication=None; ни один не выставляется наружу. `WorldTimeSeconds` — читать через getter. Не помечать SaveGame этого actor как замену будущему SG_TheLull.
+| Name | UE type | Default | Meaning |
+|---|---|---|---|
+| InitialWorldSeconds | Float (double precision) | 28800.0 | Private class default, 08:00 |
+| WorldTimeSeconds | Float (double precision) | 0.0 | authoritative seconds, valid only when bReady |
+| bReady | Boolean | false | explicit initialization gate |
+| bIsAdvancing | Boolean | false | dispatch + finished callback guard |
+| bIsRegistering | Boolean | false | reentry guard around GetSimPhase |
+| Participants | Object Reference Array | empty | registration order |
+| ParticipantPhases | Map<Object Reference, E_SimPhase> | empty | cached phase per registered object |
 
-| Name | UE type | Default | Writer | Persistence / usage |
-|---|---|---:|---|---|
-| `InitialWorldSeconds` | Double | `28800.0` | Level designer (config) | старт 08:00 от начала сценария, не save |
-| `WorldTimeSeconds` | Double | `0.0` | **только BP_SurvivalWorld** | authoritative runtime, persist via SaveGame |
-| `FixedStepSeconds` | Double | `900.0` | Class Defaults (config) | <= 15 игровых минут, provisional, не баланс |
-| `bIsAdvancing` | Boolean | false | только BP_SurvivalWorld | runtime guard, **не save** |
-| `Participants` | Array of Object references | empty | Register/Unregister functions | runtime references, **не save** |
-
-Объекты в `Participants` должны реализовывать `BPI_SimStepReceiver` (это могут быть Actor или ActorComponent). Массив не хранит копий состояний тела/комнаты.
-
+Fixed step cap is literal 900.0 Float (double precision); no editable zero/tiny value. Supported time range 0..1e9 seconds (provisional F00 contract, ~31.7 simulated years), max one advance 86400 seconds. For delta that cannot be represented at current time reject before mutation; comparison bounds reject NaN/infinite. These are technical limits not gameplay balance. 
 ## Function / event contracts
-
 ```text
-GetWorldTimeSeconds() -> Value: Double
-
-RegisterParticipant(Participant: Object) -> bRegistered: Boolean
-UnregisterParticipant(Participant: Object) -> bRemoved: Boolean
-
-AdvanceGameTime(DeltaGameSeconds: Double, Reason: GameplayTag)
-    -> bAccepted: Boolean
-
-RestoreWorldTime(RestoredSeconds: Double) -> bRestored: Boolean
-
-Dispatcher OnTimeAdvanceFinished(NewTimeSeconds: Double, Reason: GameplayTag)
+InitializeNewGame() -> bInitialized: Boolean
+IsClockReady() -> bReady: Boolean
+GetWorldTimeSeconds() -> Value: Float (double precision)
+RegisterParticipant(Participant: Object Reference) -> bRegistered: Boolean
+UnregisterParticipant(Participant: Object Reference) -> bRemoved: Boolean
+AdvanceGameTime(DeltaGameSeconds: Float (double precision), Reason: Gameplay Tag) -> bAccepted: Boolean
+RestoreWorldTime(RestoredSeconds: Float (double precision)) -> bRestored: Boolean
+OnTimeAdvanceFinished(NewTimeSeconds: Float (double precision), Reason: Gameplay Tag) // Event Dispatcher
 ```
-
-## Event graph — точный порядок execution
-
+GetWorldTimeSeconds and IsClockReady pure, others impure. Getter before ready returns 0; caller must check IsClockReady first. Helpers below Private functions. 
+## Event graph
 ```text
 event BeginPlay() {
-    Set WorldTimeSeconds = InitialWorldSeconds
-    Set bIsAdvancing = false
-    // Test level has no automatic realtime clock.
+    // No time write. No auto-initialize. No resetting flags here.
+    CheckUniqueClock()
 }
-
-function RegisterParticipant(Participant:Object) -> bRegistered {
-    if (bIsAdvancing || NOT IsValid(Participant)) return false
-    if (NOT DoesImplementInterface(Participant, BPI_SimStepReceiver)) return false
-    if (Participants.Contains(Participant)) return false
-    Participants.AddUnique(Participant)
+```
+## Function graphs — execution spec
+```text
+function CheckUniqueClock() -> bUnique {
+    let Found = GetAllActorsOfClass(BP_SurvivalWorld)
+    if (Found.Length != 1) { PrintString("Clock: expected exactly one instance"); return false }
+    return Found[0] == Self
+}
+function IsClockReady() -> bReady { return bReady }
+function GetWorldTimeSeconds() -> Value { return WorldTimeSeconds }
+function InitializeNewGame() -> bInitialized {
+    if (bReady || bIsAdvancing || bIsRegistering) return Reject("already initialized or busy")
+    if (NOT CheckUniqueClock()) return false
+    Set WorldTimeSeconds = InitialWorldSeconds
+    Set bReady = true
     return true
 }
-
-function UnregisterParticipant(Participant:Object) -> bRemoved {
-    if (bIsAdvancing) return false
-    return Participants.RemoveItem(Participant) // true if removed
+function RestoreWorldTime(RestoredSeconds) -> bRestored {
+    if (bIsAdvancing || bIsRegistering) return Reject("busy")
+    if (NOT CheckUniqueClock()) return false
+    if (NOT (RestoredSeconds >= 0.0 && RestoredSeconds <= 1000000000.0)) return Reject("invalid saved time")
+    Set WorldTimeSeconds = RestoredSeconds
+    Set bReady = true
+    return true
 }
-
-function GetWorldTimeSeconds() -> Value:Double {
-    return WorldTimeSeconds
+function RegisterParticipant(Participant) -> bRegistered {
+    if (NOT bReady || bIsAdvancing || bIsRegistering) return Reject("not ready or busy")
+    if (NOT IsValid(Participant)) return Reject("invalid receiver")
+    if (NOT DoesImplementInterface(Participant, BPI_SimStepReceiver)) return Reject("missing interface")
+    if (Participants.Contains(Participant)) return Reject("duplicate receiver")
+    Set bIsRegistering = true
+    Set local CachedPhase = GetSimPhase(Message, Target=Participant)
+    Set bIsRegistering = false
+    if (NOT IsValid(Participant)) return Reject("receiver destroyed")
+    if (NOT IsDispatchPhase(CachedPhase)) return Reject("unassigned/invalid phase")
+    Participants.Add(Participant)
+    ParticipantPhases.Add(Participant, CachedPhase)
+    return true
 }
-
-function RestoreWorldTime(RestoredSeconds:Double) -> bRestored {
-    if (bIsAdvancing || RestoredSeconds < 0) return false
-    WorldTimeSeconds = RestoredSeconds
-    return true      // NEVER call SimulateStep during restore
+function UnregisterParticipant(Participant) -> bRemoved {
+    if (bIsAdvancing || bIsRegistering) return Reject("busy")
+    Set local Removed = Participants.RemoveItem(Participant)
+    ParticipantPhases.Remove(Participant)
+    return Removed
 }
-
-function AdvanceGameTime(DeltaGameSeconds:Double, Reason:GameplayTag) -> bAccepted {
-    if (bIsAdvancing) return false
-    if (FixedStepSeconds <= 0) return false
-    if (DeltaGameSeconds <= 0 || DeltaGameSeconds > 86400) return false
-    // One call can advance at most a day. Larger jumps are a series of calls.
-
-    bIsAdvancing = true
-    let Remaining:Double = DeltaGameSeconds
-    let N:Int = CeilToInt(DeltaGameSeconds / FixedStepSeconds)
-
-    for (Index in 0 .. N-1) {
-        let StepDelta:Double = Min(Remaining, FixedStepSeconds)
-        let Start:Double = WorldTimeSeconds
-        let End:Double = Start + StepDelta
-
-        let Step:ST_SimStep = MakeST_SimStep(
-            StartSeconds=Start, EndSeconds=End,
-            DeltaSeconds=StepDelta, Reason=Reason)
+function AdvanceGameTime(DeltaGameSeconds, Reason) -> bAccepted {
+    if (NOT bReady || bIsAdvancing || bIsRegistering) return Reject("not ready or busy")
+    if (NOT CheckUniqueClock()) return false
+    if (NOT (DeltaGameSeconds > 0.0 && DeltaGameSeconds <= 86400.0)) return Reject("invalid delta")
+    if (NOT IsAllowedReason(Reason)) return Reject("invalid reason")
+    Set local Target = WorldTimeSeconds + DeltaGameSeconds
+    if (NOT (Target > WorldTimeSeconds && Target <= 1000000000.0)) return Reject("time range or resolution")
+    PruneInvalidParticipants()
+    Set bIsAdvancing = true
+    for (Index in 0 .. 95) { // For Loop with Break
+        if (WorldTimeSeconds >= Target) break
+        Set local Start = WorldTimeSeconds
+        Set local End = Min(Target, Start + 900.0)
+        Set local Step = MakeST_SimStep(StartSeconds=Start, EndSeconds=End, Reason=Reason)
         Set WorldTimeSeconds = End
-
-        for (Phase in 0 .. 4) {
+        for (Phase in [Climate, HeatSource, RoomThermal, Body, Needs]) {
             for (Participant in Participants) {
-                if (IsValid(Participant)
-                    && DoesImplementInterface(Participant, BPI_SimStepReceiver)) {
-                    let ActualPhase:Int = GetSimPhase (Message, Target=Participant)
-                    if (ActualPhase == Phase) {
-                        SimulateStep (Message, Target=Participant, Step=Step)
-                    }
+                if (IsValid(Participant)) {
+                    Find ParticipantPhases[Participant] -> CachedPhase, Found
+                    if (Found && CachedPhase == Phase) SimulateStep(Message, Target=Participant, Step=Step)
                 }
             }
         }
-        Set Remaining = Remaining - StepDelta
     }
-
+    // Completed from For Loop with Break (both exhausted and early break)
+    PruneInvalidParticipants() // private helper, no external callbacks
+    if (WorldTimeSeconds != Target) {
+        Set bIsAdvancing = false
+        PrintString("Clock FATAL: step invariant broken; partial advance, stop session")
+        return false
+    }
+    Broadcast OnTimeAdvanceFinished(WorldTimeSeconds, Reason) // guard stays true through listeners
     Set bIsAdvancing = false
-    Call OnTimeAdvanceFinished(NewTimeSeconds=WorldTimeSeconds, Reason=Reason)
     return true
 }
 ```
+**Helpers with exact behavior:** Reject(Message:String)->Boolean: Print String with prefix Clock and return false. IsDispatchPhase(Phase:E_SimPhase)->Boolean: equality/OR of five named phases, excludes sentinel/invalid. IsAllowedReason(Reason:GameplayTag)->Boolean: Is Gameplay Tag Valid then exact equality to four configured leaf tags; no parent match. PruneInvalidParticipants(): iterate array indexes descending (ForLoop on 0..Length-1 with reverse index computed from initial length); for invalid object remove Map key and Array index; if array empty return. Map Find output Found checked. Map and array never exposed. In F00 no dynamic destruction/creation during callbacks; if an object nevertheless becomes invalid it is skipped then pruned, not invoked. EndPlay receivers unregister; busy rejection is logged, next prune removes invalid objects. CheckUniqueClock at initialization/restore/advance, before any time mutation. F00 clock never spawned/despawned during callback; future streaming changes require new ownership review. 
+**Blueprint translation:** each Set local = once evaluated on exec chain, especially phase message and bounds; named list via Make Array of E_SimPhase literals and For Each Loop, no integer → enum cast. Nested loops use Completed correctly; break only outer loop; guard cleared on every exit after set. Engine nodes/pins and Map key support need Local verification; do not assume text parser compiles.
+**Restore contract:** allowed before initialization and in an idle clock. It does not dispatch or send OnTimeAdvanceFinished. Future load coordinator suspends all time requests and restores all owner snapshots together; no runtime save/load yet. InitializeNewGame subsequently refuses and never erases loaded time. 
+**Partition limit:** F00 guarantees exact elapsed clock and equal four 900-second intervals for 3600 vs 4×900. Different arbitrary call partitions can give different receiver integration steps; no claim of identical climate/body outcome. F01 must verify integration sensitivity and define step policy; no rounding away paid time.
+## PIE acceptance
+See BP_F00ClockProbe. Reject before ready/duplicate world/invalid delta/reason/range; test restore-first then init (must reject), explicit restore after advance (no replay); nested Advance and Restore rejected; duplicate receiver rejected; cached phase tested; zero/negative steps never emitted; final target reached. External variable setter must not be accessible from another BP; inspect Private flags. Tests for two simultaneous clocks and phase ordering are in probe contract. No actual UE result yet.
+## Source verification
+- [Epic LWC, served as UE 5.8](https://dev.epicgames.com/documentation/tr-tr/unreal-engine/large-world-coordinates-in-unreal-engine-5): Blueprint Float has single/double precision subtypes.
+- [Epic Blueprint Variables, served as 5.9](https://dev.epicgames.com/documentation/en-us/unreal-engine/blueprint-variables-in-unreal-engine): Float type and Private property; exact 5.8.4 editor labels and MCP pin encoding still require local inspection.
+- [Epic UE 5.8 Enum authoring](https://dev.epicgames.com/documentation/unreal-engine/designer-02-create-a-key-in-unreal-engine).
+- [Epic UE 5.8 Get All Actors Of Class](https://dev.epicgames.com/documentation/unreal-engine/BlueprintAPI/Actor/GetAllActorsOfClass), [Is Gameplay Tag Valid](https://dev.epicgames.com/documentation/unreal-engine/BlueprintAPI/GameplayTags/IsGameplayTagValid).
 
-`CeilToInt`, `Min`, `For Loop`, `Make ST_SimStep`, `Does Implement Interface`, `Add Unique` и Interface Message искать как штатные Blueprint nodes. Если подпись узла или pin отличается в редакторе, **зафиксировать фактическое имя/путь и поправить трафарет**, а не придумывать реализацию на глаз. Это логическая схема соединений, не копируемый код.
-
-Время передаётся `SimulateStep` после установки clock на `EndSeconds`. Сам receiver обязан использовать **интервал Step**, а не вычислять новый elapsed из GetWorldTime. `OnTimeAdvanceFinished` — только UI, логи или test reporting, **не физика**.
-
-### Фазы, будущая совместимость
-
-```text
-0 BPC_Climate         → внешние условия шага
-1 BPC_HeatSource      → оплаченные дрова и тепловой поток
-2 BPC_RoomThermal     → тепло комнаты/щели/укрытие
-3 BPC_SurvivalBody    → реакция тела на реально обновлённую среду
-4 future needs        → накопленные hunger/thirst/fatigue и т. п.
-```
-
-Отдельный `BPC_TimeActionRunner` в F04 будет **просить этот clock** об AdvanceGameTime, но сам не хранит `WorldTimeSeconds`. Пауза обычного realtime во время длительной операции — ответственность общего mode/controller, а не второй независимой шкалы. Нельзя пользоваться `Set Global Time Dilation` вместо честной оплаты 8 часов сна.
-
-### Отложенный Save/Load контракт
-
-`SG_TheLull` должен сохранять `WorldTimeSeconds` (Double). При Load: восстановить authoritative snapshots мира и участников; затем `RestoreWorldTime(SavedSeconds)` **без** `SimulateStep`. После восстановления зарегистрировать активных участников и только тогда снова пропускать время. Сам `SG_TheLull` пока **не создан** и его наличие нельзя заявлять.
-
-## Проверка в PIE (обязательна до `asset assembled` → `PIE tested`)
-
-1. Собрать BP_F00ClockProbe, включить bRunProbe только для отдельного PIE прогона на квартале; затем выключить.
-2. Два запуска с одинаковым 08:00: `AdvanceGameTime(3600)` против четырёх `AdvanceGameTime(900)`. В обоих `WorldTimeSeconds=32400`, `TotalReceivedSeconds=3600`, `StepCallCount=4`.
-3. `AdvanceGameTime(-60)` → false, часы и probe неизменны; повторная регистрация одного участника не создаёт повторного вызова.
-4. Если receiver попытается вызвать `AdvanceGameTime` внутри `SimulateStep`, вложенный вызов отвергается (bIsAdvancing). В тестовом probe это можно проверить позднее без добавления такого поведения в production.
-5. `RestoreWorldTime(28800)` НЕ вызывает `SimulateStep`, не расходует ресурс.
-
-**Предел первой итерации:** поддерживается только single-player и честный game clock; нет автоматически текущего времени, тела, погоды, печи или SaveGame. Не выдавать за F05 core loop.
-
-## Проверенные первоисточники / статус
-
-- Epic UE 5.8: [Blueprint Classes](https://dev.epicgames.com/documentation/en-us/unreal-engine/creating-blueprint-classes-in-unreal-engine), [Actor ticking](https://dev.epicgames.com/documentation/unreal-engine/actor-ticking-in-unreal-engine), [Blueprint Interfaces](https://dev.epicgames.com/documentation/unreal-engine/blueprints-visual-scripting-editor-user-interface-for-blueprint-interfaces-in-unreal-engine).
-- Hoarbound (фактическая реализация, не copy-paste): [SimulationClock](https://github.com/Nolavel/Hoarbound/blob/main/scripts/systems/time/simulation_clock.gd), [TimeCostedActionSystem](https://github.com/Nolavel/Hoarbound/blob/main/scripts/systems/actions/time_costed_action_system.gd).
-- Приоритет игры и исследование: [Survival Manifest](../../../../../gameplay/SURVIVAL_MANIFEST.md), [F00 foundation](../../../../../gameplay/reference/SURVIVAL_FOUNDATION_00_TO_UE.md).
-- **Проверено:** чтение документации и контрактов. **Не проверено:** реальная компиляция этого Blueprint, взаимодействие с .uasset и поведение PIE.
+Blueprint interface behavior and function graphs: [Epic Blueprint Interface](https://dev.epicgames.com/documentation/unreal-engine/blueprint-interface-in-unreal-engine?lang=en-US) (served 5.9; local 5.8.4 check required). [F00 foundation](../../../../../gameplay/reference/SURVIVAL_FOUNDATION_00_TO_UE.md).

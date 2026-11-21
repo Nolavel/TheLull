@@ -21,6 +21,7 @@ project/
     │   └── L_KeyWestBlockout.md
     ├── Survival/
     │   └── Time/
+    │       ├── E_SimPhase.md
     │       ├── ST_SimStep.md
     │       ├── BPI_SimStepReceiver.md
     │       └── BP_SurvivalWorld.md
@@ -35,7 +36,7 @@ project/
 
 1. **F−1**: Claude Local настраивает MCP, создаёт Third Person Blueprint project (Variant None), подтверждает .uproject / установленный UE 5.8.4 / template / реально доступные MCP operations. Перед сборкой — результат предварительного ревью Cloud по SHA трафарета.
 2. **F−1**: [L_KeyWestBlockout](Content/Maps/L_KeyWestBlockout.md), улицы, несколько укрытий, 727 не главный shelter. Проверка географии PR #340, камеры и перемещения в PIE.
-3. **F00**: [Config](Config/DefaultGameplayTags.ini.md) → [ST_SimStep](Content/Survival/Time/ST_SimStep.md) → [BPI_SimStepReceiver](Content/Survival/Time/BPI_SimStepReceiver.md) → [BP_SurvivalWorld](Content/Survival/Time/BP_SurvivalWorld.md) → [BP_F00ClockProbe](Content/Tests/Survival/BP_F00ClockProbe.md). Подключаем к той же карте; probe opt-in. Пустая TimeLab не нужна.
+3. **F00**: [Config](Config/DefaultGameplayTags.ini.md) → [E_SimPhase](Content/Survival/Time/E_SimPhase.md) + [ST_SimStep](Content/Survival/Time/ST_SimStep.md) → [BPI_SimStepReceiver](Content/Survival/Time/BPI_SimStepReceiver.md) → [BP_SurvivalWorld](Content/Survival/Time/BP_SurvivalWorld.md) → [BP_F00ClockProbe](Content/Tests/Survival/BP_F00ClockProbe.md). Подключаем к той же карте; probe opt-in. Пустая TimeLab не нужна.
 4. После каждого asset Claude Local через MCP: build → Compile/Save → inspect → PIE → actual vs stencil → [BACKLOG](BACKLOG.md) → handoff Codex. Дальше F01 и последующие связи на этой карте.
 
-Официальная документация [UE 5.8](https://dev.epicgames.com/documentation/en-us/unreal-engine?application_version=5.8) и [Blueprint API](https://dev.epicgames.com/documentation/en-us/unreal-engine/BlueprintAPI?application_version=5.8): проверить версию в селекторе, пины и возможности в установленной 5.8.4. **Ни один из наших ассетов ещё не создан и PIE не проверялся.**
+Официальная документация [UE 5.8](https://dev.epicgames.com/documentation/en-us/unreal-engine?application_version=5.8) и [Blueprint API](https://dev.epicgames.com/documentation/en-us/unreal-engine/BlueprintAPI?application_version=5.8): проверить версию в селекторе, пины и возможности в установленной 5.8.4. **Ни один из наших ассетов ещё не создан и PIE не проверялся.** F00 revised after Cloud #3; re-review pending. Map, enum, struct, interface, clock and probe must be reviewed as one dependency set.

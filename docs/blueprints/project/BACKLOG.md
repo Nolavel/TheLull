@@ -12,13 +12,15 @@
 
 - **PRE-001 | OPEN — project setup:** автор 21.11.2026 подтвердил установленный UE 5.8.4; локальная инспекция не проводилась, проект ещё не создан. Claude Local создаёт Third Person Blueprint (None), проверяет `.uproject` и пакеты. Owner: Claude Local.
 - **PRE-002 | OPEN — MCP setup:** Unreal MCP ещё не настроен (сообщение автора 21.11.2026). Claude Local настраивает подключение и проверяет capability inventory **Unreal MCP** (создание Structure, Interface, Blueprint Class, заполнение graph pins/links, создание level, Compile, Save, PIE, чтение actual graphs). Owner: Claude Code (local). Если нужная операция отсутствует, записать как блокировку, а не заменять её выдуманным endpoint.
-- **F00-001 | NOT RUN:** Config + ST + BPI + BP + opt-in probe на готовом квартале собраны по MD? Нужно Compile/Save и доказательство сохранения пакетов. Owner: Claude Code (local).
-- **F00-002 | NOT RUN:** разбиение 3600 s vs 4×900 s, запрет двойной регистрации, запрет отрицательного времени, Restore без симуляции; фактические результаты PIE не получены. Owner: Claude Code (local).
+- **F00-001 | NOT RUN:** Config + E_SimPhase + ST + BPI + BP + opt-in probe на готовом квартале собраны по MD? Нужно Compile/Save и доказательство сохранения пакетов. Owner: Claude Code (local).
+- **F00-002 | NOT RUN:** разбиение 3600 s vs 4×900 s, запрет двойной регистрации, отрицательного/нулевого/невалидного advance, fractional tail, duplicate clock, restore-before-init и после advance без симуляции, phase order/cache, reentry; фактические результаты PIE не получены. Owner: Claude Code (local).
 - **F00-003 | NOT RUN:** текст ↔ actual asset graph → diff по переменным, типам, пинам, owner state и API; изменение каждого спорного места через отдельное согласование. Owner: Claude Code (local).
 
 **Эти пункты не являются обнаруженными ошибками проекта.** Это открытые проверки, которые должны быть закрыты положительным или отрицательным доказательством.
 
 - **PRE-003 | OPEN — pre-build stencil review:** Claude Cloud перепроверяет трафареты до локальной сборки, фиксирует SHA, технические замечания, точные исправления и статус REVIEWED / NEEDS REVISION / LOCAL VERIFICATION REQUIRED. Codex исправляет; Local получает обдуманный согласованный snapshot. Не заявлять PIE. Owner: Claude Cloud + Codex.
+
+- **F00-004 | NEEDS RE-REVIEW:** Claude Cloud [review](https://github.com/Nolavel/TheLull/issues/3#issuecomment-7059415969) points 1–10 addressed in revised stencils: Float subtype, explicit initialization, enum/cache, private writer, duplicate clock, target loop, derived delta, rejection reasons, cleanup. Re-review required prior to local handoff. Local verification of actual precision, Map, graph nodes, pins and PIE remains OPEN. Existing textual checker only covers Event graph; function graphs and other asset types require separate inspection.
 
 ## Шаблон каждой новой записи (пополняет Claude Local после операции MCP)
 
