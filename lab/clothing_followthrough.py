@@ -59,10 +59,18 @@ def followup_work(body: Body, room: Room, world: World, *,
                 "reason": "recovery time or thermal condition insufficient"}
 
     # Work occupies an actual hour in the same physical shelter.
+    # _advance's generic awake controller restores idle breath. A strenuous
+    # ACTION cannot silently gain that idle stamina while working; apply its
+    # explicit cost to the pre-work value, proportionally even if terminal
+    # interrupts the hour. Keep the same thermal / time controller.
+    stamina_before_work = body.stamina
+    fatigue_before_work = body.fatigue
     work = _advance(body, room, world, gear, WORK_MINUTES, at_home=True)
     complete = work >= WORK_MINUTES - 1e-6 and not body.terminal
-    if complete:
-        body.stamina = max(0.0, body.stamina - WORK_CONSUMPTION)
+    proportion = min(1.0, work / WORK_MINUTES)
+    body.stamina = max(0.0, stamina_before_work - WORK_CONSUMPTION * proportion)
+    body.fatigue = min(100.0, max(body.fatigue,
+                                  fatigue_before_work + 7.0 * (work / 60.0)))
     return {"choice": "rest_then_work" if rest_minutes else "work_now",
             "completed": complete,
             "rest_minutes": round(rest_minutes, 6),
