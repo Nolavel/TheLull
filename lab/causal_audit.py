@@ -193,6 +193,36 @@ def analyze(seeds: int = 30, days: int = HORIZON) -> dict:
             "paired_weather_days_compared": weather_pairs,
         }
 
+    # Separate environmental dominance from differences between player priors.
+    # Each profile pair sees the same world variant, seed and weather.
+    strata = {}
+    for variant in VARIANTS:
+        strata[variant] = {}
+        for arm in ARMS:
+            strata[variant][arm] = {}
+            for profile in PROFILES:
+                subset = [results[(variant, profile, seed)][arm]
+                          for seed in range(1, seeds + 1)]
+                strata[variant][arm][profile] = {
+                    "mean_days": round(statistics.mean(r["days_completed"] for r in subset), 3),
+                    "end_reasons": dict(sorted(Counter(
+                        r["end_reason"] or "horizon" for r in subset
+                    ).items())),
+                    "mean_first_morning_core_c": round(statistics.mean(
+                        r["history"][0]["core_next_dawn"] for r in subset
+                    ), 3),
+                }
+    profile_pairs = {}
+    for variant in VARIANTS:
+        outcomes = Counter()
+        for seed in range(1, seeds + 1):
+            novice = results[(variant, "novice", seed)]["baseline"]["days_completed"]
+            local = results[(variant, "local", seed)]["baseline"]["days_completed"]
+            outcomes["local_longer" if local > novice else (
+                "novice_longer" if novice > local else "same_horizon"
+            )] += 1
+        profile_pairs[variant] = dict(sorted(outcomes.items()))
+
     traces = []
     # Observe real alternatives from a copy of an *unchanged* evening state.
     for variant, profile, seed in grid:
@@ -227,6 +257,8 @@ def analyze(seeds: int = 30, days: int = HORIZON) -> dict:
         },
         "thermal_exposure": _description_of_unheated_room(),
         "arms": per_arm,
+        "by_variant_and_profile": strata,
+        "same_seed_profile_comparison": profile_pairs,
         "counterfactual_evening": {
             "observed_evenings": len(traces),
             "chosen": dict(sorted(by_action.items())),
@@ -265,6 +297,8 @@ def main() -> None:
         print(f"{arm}: days={row['mean_completed_days']}, "
               f"first_morning_core={row['mean_core_after_day1_c']}C, "
               f"endings={row['end_reasons']}, changes={row['paired_days_difference']}")
+    print("Baseline by variant/profile:", result["by_variant_and_profile"])
+    print("Paired novice versus local:", result["same_seed_profile_comparison"])
     print("Paired weather mismatches:", result["checks"]["weather_mismatches_across_paired_cases"])
     print("True alternative actions:", {
         k: v for k, v in result["counterfactual_evening"].items()
