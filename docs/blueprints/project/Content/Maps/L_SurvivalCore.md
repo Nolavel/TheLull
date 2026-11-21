@@ -1,7 +1,7 @@
 # L_SurvivalCore — playable core, no geography
 Package: /Game/Maps/L_SurvivalCore
 AssetType: Level (umap)
-DependsOn: Epic Third Person Template map/pawn/GameMode/input (external paths UNKNOWN), DefaultGameplayTags.ini, DefaultEngine.ini (after map exists), ST_SimStep, E_SimPhase, E_AdvanceResult, BPI_SimStepReceiver, BP_SurvivalWorld, opt-in BP_F00ClockProbe, BP_CoreExposureZone, ST_CoreVitals, BPC_SurvivalBody, WBP_VitalsHUD and WBP_SurvivalDebug (staged). Status: draft / NEEDS REVIEW. [Manifest](../../../../gameplay/SURVIVAL_MANIFEST.md).
+DependsOn: Epic Third Person Template map/pawn/GameMode/input (external paths UNKNOWN), DefaultGameplayTags.ini (first); DefaultEngine.ini is a post-map consumer, NOT a prerequisite, ST_SimStep, E_SimPhase, E_AdvanceResult, BPI_SimStepReceiver, BP_SurvivalWorld, opt-in BP_F00ClockProbe, BP_CoreExposureZone, ST_CoreVitals, BPC_SurvivalBody, WBP_VitalsHUD and WBP_SurvivalDebug (staged). Status: draft / NEEDS REVIEW. [Manifest](../../../../gameplay/SURVIVAL_MANIFEST.md).
  
 ## A: Third Person + F00
 Duplicate default Third Person Blueprint None level under /Game/Maps/L_SurvivalCore. Preserve GameMode, PlayerStart, pawn/camera/input. Add one BP_SurvivalWorld and optional BP_F00ClockProbe. Level BeginPlay count public bRunProbe flags; >1 active abort error, 1 active skip startup (probe owns init), 0 active find exactly one clock, InitializeNewGame true or abort. F00 PIE first; do not reference not-yet-created core assets.
@@ -13,3 +13,5 @@ Level Blueprint is built inside this .umap, not a separate asset. Project Settin
  
 ## Acceptance
 Default pawn moves/camera works. F00 probe separate. No reinitialization of clock after it is ready; RestoreWorldTime only before any Body/Zone/HUD startup. Normal fresh PIE: 4 presses key2=1h, 8 additional=3h; W/C results per body stencil. Warm override then 4 steps: warmth rises, other needs decrease. Clear override (9), walk into Box with partly depleted warmth, press 2: warmth rises by .05; walk out, press 2: falls by .10 (clamp applies). Both use same clock and same body; no reset, no new widget. Actual source debug updates on paid step. Compare same number of steps staying outside vs entering. Auto cross boundary: at next 1 s timer sample effective input changes; no promise of exact within-sample exposure integration. Mock water changes hydration only, time unchanged. Auto/manual cannot double bill; hide/show debug no state mutation. Reopen PIE no duplicate clock/body/widgets. Full climate, real zone, real finite items/actions before geographic production; no UE result yet.
+
+**Level graph dependency rule:** test keyboard events require local input verification alongside the stock Third Person Enhanced Input mapping. No new InputAction/MappingContext asset asserted before inspection. Any new custom asset or changed config requires its own MD.

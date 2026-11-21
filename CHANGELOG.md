@@ -7,6 +7,10 @@
 
 ## Unreleased
 
+### Fixed (all-stencil dependency pass, 21.11.2026)
+
+- Rechecked all 14 active targets and one deferred map. Fixed ST_CoreVitals field type/name ambiguity, enum result caller, startup config dependency cycle, and conflicting historical API reference. Dependency audit added, Cloud review and UE PIE still outstanding. Codex / ue-codex.
+
 ### Decision / Added (production: Core before geography; drafts before review, 21.11.2026)
 
 - Автор изменил приоритет: TLD survival core → minimal HUD → Debug UI → связанные действия/ресурсы → география. Трафареты можно публиковать в production до Cloud review, явно NEEDS REVIEW / NEEDS RE-REVIEW; это не статус готовности к сборке. F00 размещён на L_SurvivalCore; граф часов не изменён. Старый план квартала DEFERRED.

@@ -11,12 +11,12 @@
 ## Не выполнено / ожидает локальной проверки
 
 - **F−1-001 | NOT RUN:** подтвердить существующий Third Person Template, пакеты, camera/movement baseline в UE 5.8.4. Owner: Claude local.
-- **F−1-002 | BLOCKED source identification:** PR #340, точные tower/gas IDs, bbox, две дополнительные shelter candidates; 727 не главный shelter. Owner: Claude + Codex handoff.
-- **F−1-003 | NOT RUN:** собрать L_KeyWestBlockout, коллизии, маршруты и ≥2 укрытия; проверить в PIE. Owner: Claude local.
+- **F−1-002 | DEFERRED (geography only):** PR #340, точные tower/gas IDs, bbox, две дополнительные shelter candidates; 727 не главный shelter. Owner: Claude + Codex handoff.
+- **F−1-003 | DEFERRED (geography only):** собрать L_KeyWestBlockout, коллизии, маршруты и ≥2 укрытия; проверить в PIE. Owner: Claude local.
 
 - **PRE-001 | OPEN — project setup:** автор 21.11.2026 подтвердил установленный UE 5.8.4; локальная инспекция не проводилась, проект ещё не создан. Claude Local создаёт Third Person Blueprint (None), проверяет `.uproject` и пакеты. Owner: Claude Local.
 - **PRE-002 | OPEN — MCP setup:** Unreal MCP ещё не настроен (сообщение автора 21.11.2026). Claude Local настраивает подключение и проверяет capability inventory **Unreal MCP** (создание Structure, Interface, Blueprint Class, заполнение graph pins/links, создание level, Compile, Save, PIE, чтение actual graphs). Owner: Claude Code (local). Если нужная операция отсутствует, записать как блокировку, а не заменять её выдуманным endpoint.
-- **F00-001 | NOT RUN:** Config + E_SimPhase + ST + BPI + BP + opt-in probe на L_SurvivalCore собраны по MD? Нужно Compile/Save и доказательство сохранения пакетов. Owner: Claude Code (local).
+- **F00-001 | NOT RUN:** Config + E_SimPhase + E_AdvanceResult + ST + BPI + BP + opt-in probe на L_SurvivalCore собраны по MD? Нужно Compile/Save и доказательство сохранения пакетов. Owner: Claude Code (local).
 - **F00-002 | NOT RUN:** разбиение 3600 s vs 4×900 s, запрет двойной регистрации, отрицательного/нулевого/невалидного advance, fractional tail, duplicate clock, restore-before-init и после advance без симуляции, phase order/cache, reentry; фактические результаты PIE не получены. Owner: Claude Code (local).
 - **F00-003 | NOT RUN:** текст ↔ actual asset graph → diff по переменным, типам, пинам, owner state и API; изменение каждого спорного места через отдельное согласование. Owner: Claude Code (local).
 
@@ -39,6 +39,8 @@
 - **AUDIT-001 | NEEDS REVIEW:** static dependency self-audit of all active stencils, enum output propagation, real DefaultEngine.ini map setting, body fixture writer guards. See DEPENDENCY_AUDIT.md. Cloud re-review and actual UE/MCP/PIE still OPEN.
 - **F00-005 | NEEDS REVIEW:** E_AdvanceResult, BPI.SimulateStep bApplied, PartialFailure terminal; not atomic across receivers; test failure fixture pending.
 - **F00-006 | NEEDS REVIEW:** post-init Restore rejected until owner load coordinator; test current probe contract.
+
+- **AUDIT-002 | NEEDS CLOUD REVIEW:** all 14 active targets + one deferred geography level checked for reference/dependency consistency; see DEPENDENCY_AUDIT. Unreviewed MD, no runtime proof.
 
 ## Шаблон каждой новой записи (пополняет Claude Local после операции MCP)
 

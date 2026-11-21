@@ -57,6 +57,8 @@
 
 **Один Markdown — один реальный UE asset (или один конкретный конфигурационный файл).** Трафареты располагаются в [`docs/blueprints/project/`](../blueprints/project/) — **зеркале структуры открытого Unreal-проекта**: `Content/`, `Config/`, позже другие реально востребованные пути. Для `Content/Survival/Time/BP_SurvivalWorld.md` ожидаемый результат — `<ProjectRoot>/Content/Survival/Time/BP_SurvivalWorld.uasset`, package `/Game/Survival/Time/BP_SurvivalWorld`. Новые этапы дополняют эту же структуру, а не создают параллельные папки вне зеркала. Каталог `docs/blueprints/project/` — **только текстовый mirror**; исходники `.uasset` и настройки `.ini` записываются Claude в настоящий локальный проект, а не в папку с MD. Общие правила: [`docs/blueprints/README.md`](../blueprints/README.md).
 
+До Cloud review проверять [все зависимости вместе](../blueprints/project/DEPENDENCY_AUDIT.md): one MD per new custom asset or changed ini, actual parent/type, interface signatures at every consumer, staged creation order, negative PIE scenarios. Stock UE assets remain external and are not recreated as fake MD.
+
 В каждом трафарете обязаны быть:
 - точный `Package` и `ParentClass`, список зависимостей и конкретный порядок создания в редакторе UE 5.8.4;
 - переменные с **UE-типом, единицей, default**, пометкой runtime/config/save и *единственным* authoritative writer;
