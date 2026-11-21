@@ -62,6 +62,21 @@ class Beliefs:
     burn_rate_est: float = 1.0  # how fast the player thinks fuel burns, units/h
     recovery_est: float = 6.0  # how much rest the player thinks a warm hour of sleep pays back
     work_hours_est: dict[str, float] = field(default_factory=dict)
+    # Thermal beliefs are explicitly tentative; they are updated from the
+    # body's lived observations, NEVER copied from the hidden physics knobs.
+    shelter_core_cooling_est: float = 1.0  # °C of body core lost per sheltered hour
+    stove_effect_est: float = 8.0          # guessed benefit of a lit stove (°C felt)
+
+    def observe_shelter_cooling(self, before_c: float, after_c: float,
+                               elapsed_h: float) -> str:
+        """A measurable, completed unheated interval informs later fire choices."""
+        if elapsed_h <= 1e-8 or before_c <= after_c:
+            return ""
+        measured = (before_c - after_c) / elapsed_h
+        old = self.shelter_core_cooling_est
+        self.shelter_core_cooling_est = max(0.05, 0.5 * old + 0.5 * measured)
+        return (f"охлаждение тела в убежище: "
+                f"{old:.2f}→{self.shelter_core_cooling_est:.2f} °C/ч")
 
     def expected_work_hours(self, work) -> float:
         return self.work_hours_est.get(work.name, work.hours)
