@@ -50,6 +50,9 @@ class DayRecord:
     margin: float = 0.0
     signal_trust: float = 0.0
     carried: int = 0
+    search_minutes: float = 0.0
+    recheck_searches: int = 0  # spent a 30-min chunk when expected loot was zero
+    empty_searches: int = 0  # actual searched observations, not an oracle
     plan_changes: int = 0
     caught_in_storm: bool = False
     after_dark: bool = False
@@ -118,10 +121,13 @@ def run_day(world: World, agent: Agent, weather: DayWeather, lrng: random.Random
         target = ranking[0]["node"]
         target_dec = Decision(
             clock(depart), "цель", "принести запасы, пока светло",
-            ["известные запасы: " + ", ".join(f"{r['node']}≈{r['loot']:.0f}" for r in ranking)],
+            ["оценки запасов: " + ", ".join(
+                f"{r['node']}≈{r['loot']:.0f}" + (" (не проверено до конца)" if r["recheck"] else "")
+                for r in ranking)],
             [{"option": r["node"], "predicted_min": round(_predicted_trip(agent, r["node"])),
-              "score": round(r["score"], 3)} for r in ranking],
-            target, "больше ожидаемого груза за меньшее время")
+              "score": round(r["score"], 3), "recheck": r["recheck"]} for r in ranking],
+            target, ("повторная проверка: прежняя оценка ноль, но пустота не наблюдалась"
+                     if ranking[0]["recheck"] else "больше ожидаемого груза за меньшее время"))
     else:
         unexplored = [n for n in world.nodes
                       if agent._knows_node(n) and n not in agent.visited and n != "home"
@@ -182,15 +188,25 @@ def run_day(world: World, agent: Agent, weather: DayWeather, lrng: random.Random
             if goal == "home":
                 break
             agent.visited.add(node)
+            rechecked_this_visit = False
             while not returning:
                 cost_home = agent.path(node, "home", storm=weather.is_storm(now))[0]
                 left = agent.beliefs.loot.get(node, 0)
-                if carried >= CARRY_CAPACITY or left <= 0:
+                if carried >= CARRY_CAPACITY:
+                    break
+                # Zero *prediction* is not proof. At most one uncertain recheck
+                # per visit; every attempt incurs travel and a real search chunk.
+                if left <= 0 and (not agent.can_recheck(node) or rechecked_this_visit):
                     break
                 if now + SEARCH_CHUNK_MIN + cost_home + agent.margin > world.day_length:
                     rec.events.append(f"{clock(now)} пора возвращаться: до темноты впритык (запас {agent.margin:.0f} мин)")
                     break
+                if left <= 0:
+                    rechecked_this_visit = True
+                    rec.recheck_searches += 1
+                    rec.events.append(f"{clock(now)} перепроверяет {node}: оценка ноль, но пустота не подтверждена")
                 now += SEARCH_CHUNK_MIN
+                rec.search_minutes += SEARCH_CHUNK_MIN
                 felt = world.felt_outdoors_c(INDOOR_EXPOSURE, now, weather)
                 step_core(body, felt, SEARCH_CHUNK_MIN / 60.0)
                 step_fatigue(body, SEARCH_CHUNK_MIN / 60.0, asleep=False, per_hour=TRAVEL_FATIGUE_PER_H)
@@ -201,7 +217,8 @@ def run_day(world: World, agent: Agent, weather: DayWeather, lrng: random.Random
                 update = agent.learn_loot(node, got)
                 target_dec.belief_update += update + "; "
                 if got == 0:
-                    rec.events.append(f"{clock(now)} {node} пуст — ожидание не оправдалось")
+                    rec.empty_searches += 1
+                    rec.events.append(f"{clock(now)} в {node} поиск ничего не дал — отметил пустым")
                 check_signal()
             returning, goal = True, "home"
             continue
