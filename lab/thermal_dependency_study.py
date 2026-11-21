@@ -240,6 +240,7 @@ def simulate(seed: int, variant: str, profile: str, arm: str = "baseline",
         raise AssertionError(f"thermal ledger included a forecast: {observed_delta_error:.6f}C")
     return {
         "days": story["days_completed"],
+        "elapsed_minutes": story["elapsed_minutes"],
         "end_reason": story["end_reason"] or "horizon",
         "first_dawn_end_core_c": trace[0]["core_next_dawn"] if trace else None,
         "last_core_c": ending_core,
@@ -406,7 +407,8 @@ def analyze(seeds: int = 30, days: int = HORIZON) -> dict:
             )
             mismatches += mismatch_days
             ledger_violations += x["ledger_error"] > 0.001
-            extra_night += len(x["evening_options"]) != x["nights"]
+            # A terminal stop before evening produces zero proposals.
+            extra_night += len(x["evening_options"]) > x["nights"]
     return {
         "design": {
             "kind": "paired one-factor interventions + coupled dusk-shift reference",
