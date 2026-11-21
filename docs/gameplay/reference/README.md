@@ -4,7 +4,7 @@
 Область: в первую очередь **Survival Mode** The Long Dark; не переносить автоматически Wintermute, Challenges и DLC.
 Авторское решение: The Long Dark — **первичный референс системного survival-геймплея TheLull**. Epic / ALIS — референсы реализации и архитектуры, не замена игровому референсу.
 
-**Обязательный строительный документ:** [`../SURVIVAL_MANIFEST.md`](../SURVIVAL_MANIFEST.md) — четыре правила работы от core loop к проверяемым UE Blueprint. Сборочные графы F00 по одному ассету на файл находятся в [`../../blueprints/survival_f00/`](../../blueprints/survival_f00/).
+**Обязательный строительный документ:** [`../SURVIVAL_MANIFEST.md`](../SURVIVAL_MANIFEST.md) — четыре правила работы от core loop к проверяемым UE Blueprint. Схема зеркала UE-проекта и F00 трафареты для Claude Code + Unreal MCP находятся в [`../../blueprints/project/`](../../blueprints/project/).
 
 ## Начинать здесь
 
