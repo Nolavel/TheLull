@@ -7,6 +7,12 @@
 
 ## Unreleased
 
+### Decision (production: манифест, шаблон Third Person, квартал Key West, 21.11.2026)
+
+- Публикуем **только документацию**: [манифест](docs/gameplay/SURVIVAL_MANIFEST.md), [зеркальный UE-проект](docs/blueprints/project/README.md), атомарную сборку Claude Code через Unreal MCP и backlog. Python lab, CI и остальные изменения Codex в production не переносим этим коммитом.
+- **F−1:** штатный Epic Third Person Template (Blueprint, None) и [L_KeyWestBlockout](docs/blueprints/project/Content/Maps/L_KeyWestBlockout.md) по Hoarbound PR #340 (edbcf021). 727 не основной shelter. Bahama, Douglass, вышка, АЗС, несколько доступных укрытий; точные tower/gas IDs и ещё два кандидата проверить. Остальные здания — закрытые blockout-массы. F00 clock подключается после playable baseline на той же карте.
+- Структура трафаретов отражает реальные пути Content/Config; готовые штатные assets не дублировать. Пока только MD, Unreal MCP и PIE не проверены. Codex / production (целевой документальный пакет).
+
 ### Decision (UE 5.8.4 source verification + mirrored project stencils + Claude MCP backlog, 21.11.2026)
 
 - Расширен [survival-манифест](docs/gameplay/SURVIVAL_MANIFEST.md): обязательная официальная справка **Epic UE 5.8** и проверка реальных pin/asset classes в установленном **UE 5.8.4**, capability-check текущего Unreal MCP без выдуманных операций.

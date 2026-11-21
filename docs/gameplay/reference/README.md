@@ -6,6 +6,8 @@
 
 **Обязательный строительный документ:** [`../SURVIVAL_MANIFEST.md`](../SURVIVAL_MANIFEST.md) — четыре правила работы от core loop к проверяемым UE Blueprint. Схема зеркала UE-проекта и F00 трафареты для Claude Code + Unreal MCP находятся в [`../../blueprints/project/`](../../blueprints/project/).
 
+**Актуальный старт (production):** Epic Third Person Template + [игровой квартал Key West](../../blueprints/project/Content/Maps/L_KeyWestBlockout.md). 727 более не главный shelter. Только после playable baseline подключать F00 clock.
+
 ## Начинать здесь
 
 **Первая практическая точка входа для UE:** [SURVIVAL_FOUNDATION_00_TO_UE.md](SURVIVAL_FOUNDATION_00_TO_UE.md) — исследование фундамента TLD + фактического кода Hoarbound + архитектуры Ки-Уэста, собственники Blueprint-переменных, первый граф действия, критерии проверки; **не** перенос lab-баланса и **не** созданный `.uasset`.

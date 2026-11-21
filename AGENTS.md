@@ -3,11 +3,11 @@
 Действуют для любого агента (Claude, Codex, Grok и другие) и не зависят от конкретного MCP или инструмента.
 Где правило агента (`CLAUDE.md` и т. п.) расходится с этим файлом, главнее этот файл.
 
-## Обязательный манифест survival (решение автора 21.11.2026)
+## Обязательный survival-манифест и сборка (решение автора 21.11.2026)
 
-**Перед началом проектирования, изменения или переноса survival-логики читать [`docs/gameplay/SURVIVAL_MANIFEST.md`](docs/gameplay/SURVIVAL_MANIFEST.md).** Это обязательный вход в работу для всех агентов, не факультативный референс. Его четыре условия: (1) начинать с core loop The Long Dark → самостоятельный loop TheLull; (2) сопоставлять TLD, жанр, реальный Hoarbound и документальный Key West; (3) выводить исполнимый UE-контракт в формате **один Markdown — один Blueprint/UE asset**; (4) проверять причинную цену через соседние системы, ночь, сохранение и в итоге живого игрока.
-
-**Сборочные трафареты:** [`docs/blueprints/README.md`](docs/blueprints/README.md), первый пакет — [`docs/blueprints/project/`](docs/blueprints/project/README.md). Существующий план F00 — [`docs/gameplay/reference/SURVIVAL_FOUNDATION_00_TO_UE.md`](docs/gameplay/reference/SURVIVAL_FOUNDATION_00_TO_UE.md). Список и последовательность проверены до создания следующего Blueprint; реальную компиляцию/PIE нельзя подменять текстом или Python.
+- Обязательное начало работы любого агента: [SURVIVAL_MANIFEST.md](docs/gameplay/SURVIVAL_MANIFEST.md). Грамматика TLD, фактические наработки Hoarbound, специфика Key West, собираемый UE-контракт и сквозная проверка. F−1: **Epic Third Person Template, Blueprint, Variant None**, штатные Character/camera/movement/input. Сначала [игровой квартал Key West](docs/blueprints/project/Content/Maps/L_KeyWestBlockout.md) по Hoarbound PR #340, а не пустая карта. 727 — ориентир/возможный shelter, не основной. Затем F00 clock и остальные системы. [Epic Third Person Template](https://dev.epicgames.com/documentation/en-us/unreal-engine/third-person-template-in-unreal-engine?application_version=5.8), выбрать 5.8 и проверить фактические пакеты, классы, пины в установленном UE 5.8.4.
+- [Текстовое зеркало проекта](docs/blueprints/project/README.md): один MD на один asset/config; совпадение с реальными Content/Config. Вложенные папки — наше соглашение, не требование UE; не дублировать штатные файлы шаблона и не плодить структуру впрок.
+- Claude Code в открытом UE через фактически доступный Unreal MCP: preflight, один asset, Compile/Save/inspect/PIE, expected vs actual, [BACKLOG](docs/blueprints/project/BACKLOG.md) в ue-claudeflow и handoff Codex. Неподдержанные операции — BLOCKED. Справка [Epic UE 5.8](https://dev.epicgames.com/documentation/en-us/unreal-engine?application_version=5.8) и [Blueprint API](https://dev.epicgames.com/documentation/en-us/unreal-engine/BlueprintAPI?application_version=5.8); проверить селектор версии и реальный hotfix 5.8.4. Не выдавать MD или Python за UE-реализацию.
 
 ## Ветки — строгое правило
 

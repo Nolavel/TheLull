@@ -38,6 +38,10 @@ Claude работает как технический директор: иссл
 
 После каждого ассета: сравнить ожидаемый MD с фактическим `.uasset`/PIE, занести ошибки, неопределённости и предложения улучшений в [`docs/blueprints/project/BACKLOG.md`](docs/blueprints/project/BACKLOG.md) **в своей ветке `ue-claudeflow`**. У каждой записи evidence, Epic link, место в core loop, owner и статус. Исправления самих трафаретов передать Codex в handoff; ветку `ue-codex` не править, в `production` без решения автора не сливать. Если зеркало ещё не вошло в `production`, сначала получить согласованный snapshot/handoff от автора, не смешивая агентские ветки молча.
 
+## F−1 — игровая основа
+
+Следовать [манифесту](docs/gameplay/SURVIVAL_MANIFEST.md) и [L_KeyWestBlockout](docs/blueprints/project/Content/Maps/L_KeyWestBlockout.md). Сначала Epic Third Person Template с готовыми camera/character/input, затем квартал вокруг 727 по Hoarbound PR #340. 727 не главный shelter, вышка и АЗС требуют проверки идентификации. После playable PIE baseline подключать F00 clock. Штатные assets не дублировать, структуру сверять с открытым проектом.
+
 ## Готово, когда
 
 - Результат проверен сценарием из репозитория (см. «Воспроизводимость» в `AGENTS.md`).

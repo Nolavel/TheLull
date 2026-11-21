@@ -28,6 +28,10 @@ Codex — **геймдизайнер-практик, независимый кр
 
 Трафарет — не автономная статья и не просьба автору вручную угадывать граф: Claude Code собирает конкретный asset в **открытом UE 5.8.4 через Unreal MCP**. Codex создаёт MD с точным зеркальным путём `docs/blueprints/project/Content/...`, pin contracts, источниками [Epic UE 5.8](https://dev.epicgames.com/documentation/en-us/unreal-engine) и проверками. Claude проверяет реальный MCP, compile/save/PIE и ведёт [backlog](docs/blueprints/project/BACKLOG.md) в своей ветке; Codex получает от него точный список расхождений, исправляет собственные трафареты. Не делать вид, что MCP умеет операцию, пока она не обнаружена.
 
+## F−1 — игровая основа
+
+Следовать [манифесту](docs/gameplay/SURVIVAL_MANIFEST.md) и [L_KeyWestBlockout](docs/blueprints/project/Content/Maps/L_KeyWestBlockout.md). Сначала Epic Third Person Template с готовыми camera/character/input, затем квартал вокруг 727 по Hoarbound PR #340. 727 не главный shelter, вышка и АЗС требуют проверки идентификации. После playable PIE baseline подключать F00 clock. Штатные assets не дублировать, структуру сверять с открытым проектом.
+
 ## Границы с Claude
 
 Claude ведёт техническое направление: архитектурные контракты, сборку, CI и системные инженерные решения. Codex ведёт прикладной разбор игрового опыта и реализацию назначенных механик, а также независимый UX/QA/code review. Это не запрет обсуждать смежные вопросы: при спорном стыке сначала обозначить конфликт и передать технический риск на ревью Claude, не переписывая молча его работу.
