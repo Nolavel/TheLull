@@ -100,11 +100,27 @@ class GoalOvernightContracts(unittest.TestCase):
                 self.assertAlmostEqual(r["elapsed_minutes"],
                                        r["terminal_at_minute"],places=5)
 
+    def test_chosen_stockpiling_trip_is_not_canceled_by_sufficient_fuel(self):
+        r=run(1,2,variant="A_safe",initial_fuel=4,
+              goal_policy="frozen",initial_goal=FUEL)
+        day=r["history"][0]
+        self.assertEqual(day["goal_continuity"]["morning_decision"]["choice"],FORAGE)
+        self.assertTrue(day["day_trip"]["went_out"])
+        self.assertEqual(audit_history(r)["checks"],{})
+
+    def test_missed_deadline_does_not_produce_unavailable_work_goal(self):
+        w=World.load("district_v0","A_safe")
+        b=Body(core_c=36.8,stamina=85,elapsed_minutes=3000)
+        r=Room(fuel=4)
+        result=pressure(b,r,w,pending_work=True,deadline_minute=2880)
+        self.assertEqual(result["goal"],PROTECT)
+        self.assertIn("deadline",result["reason"])
+
     def test_two_policy_trial_is_repeatable_with_no_forced_success(self):
         a=study(seeds=2,days=3)
         b=study(seeds=2,days=3)
         self.assertEqual(a,b)
-        self.assertEqual(a["design"]["pair_count"],36)
+        self.assertEqual(a["design"]["pair_count"],108)
         self.assertTrue(all(v==0 for v in a["checks"].values()),a["checks"])
         self.assertEqual(a["design"]["human_participants"],0)
 
