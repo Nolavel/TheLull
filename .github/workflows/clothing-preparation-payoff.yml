@@ -51,6 +51,8 @@ jobs:
                         f"no-stamina={a['prepared_no_stamina']['mean_stamina_after']} stamina, "
                         f"no-thermal={a['prepared_no_thermal']['mean_core_after']} core")
           print("\\nObserved wins/trade-offs:",r["observations"])
+          print("Ablation direct impact on completion/time vs merely retaining a stamina meter:")
+          print(r["ablation_causal_changes"])
           print("Checks:",r["checks"])
           print("No one perfect policy is required; the actor's fixed 2h belief is an experimental weakness.")
           assert all(v == 0 for v in r["checks"].values()),r["checks"]
