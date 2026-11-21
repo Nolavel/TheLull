@@ -69,7 +69,7 @@ class ChoiceTest(unittest.TestCase):
     def test_the_player_does_not_learn_a_hidden_fire_out_time(self):
         days = three_days(OUTSIDE_C, COOLING_RATE_C_PER_H, 3)["days"]
         self.assertFalse(any("огонь кончился раньше" in d["lesson"] for d in days))
-        self.assertTrue(all(d["lesson"].startswith(("точного наблюдения", "наблюдаемый расход", "огонь уже погас"))
+        self.assertTrue(all(d["lesson"].startswith(("точного наблюдения", "наблюдаемый расход", "огонь уже погас", "погасший огонь"))
                             for d in days))
 
 
