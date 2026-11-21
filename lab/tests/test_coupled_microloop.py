@@ -69,6 +69,21 @@ class CoupledGreyboxContract(unittest.TestCase):
             run(1,"A_safe","local",wet=True,need_water=True,
                 provider=lambda _: "телепорт")
 
+    def test_cli_questionnaire_is_instrumented_without_live_participant(self):
+        from lab.coupled_playtest import run_session
+        prompts=[]
+        def mock_answer(prompt):
+            prompts.append(prompt)
+            return "1" if "номер" in prompt else "изучить последствия"
+        result=run_session(1,"A_safe",wet=True,need_water=True,
+                           ask=mock_answer,show=lambda _:None)
+        self.assertTrue(result["human_choice_notes"])
+        self.assertEqual(result["human_story"]["participant_source"],"human")
+        self.assertIn("own_next_intention",result["interview"])
+        self.assertTrue(any("Почему" in x for x in prompts))
+        self.assertEqual(result["same_seed_agent_story"]["participant_source"],
+                         "simulated_agent")
+
     def test_no_claim_that_agent_predicted_human_fun(self):
         r=study(seeds=1)
         self.assertIn("fun", " ".join(r["limits"]))
