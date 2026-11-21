@@ -9,6 +9,7 @@ from __future__ import annotations
 import argparse
 import json
 from dataclasses import asdict, replace
+from typing import Callable
 
 from .evening import (COOLING_RATE_C_PER_H, EXPEDITION, HEAVY, HOURS_OF_NIGHT, HYPOTHERMIC_C,
                       IDLE_FATIGUE_PER_H, SEAL, PACK, SEAL_COOLING_FACTOR, SHORT_WALK, STEP_H, UNDECIDED,
@@ -19,7 +20,9 @@ OUTSIDE_C = -18.0  # Hoarbound's reference exposure figure; placeholder, not The
 
 
 def play(option_label: str, outside_c: float, room: Room, body: Body, beliefs: EveningBeliefs,
-         *, hours_of_night: float = HOURS_OF_NIGHT) -> dict:
+         *, hours_of_night: float = HOURS_OF_NIGHT,
+         automatic_ignition: bool = True,
+         on_fire_opportunity: Callable[[str, float], None] | None = None) -> dict:
     if hours_of_night <= 0:
         raise ValueError("night duration must be positive")
     work = {"A": HEAVY, "B": None, "C": SEAL, "D": PACK}[option_label[0]]
@@ -93,7 +96,10 @@ def play(option_label: str, outside_c: float, room: Room, body: Body, beliefs: E
     refusal = sleep_refusal(room, body, outside_c)
     fuel_at_ignition = room.fuel
     fire_ignition_h = hour
-    room.fire_lit = room.fuel > 0
+    if automatic_ignition:
+        room.fire_lit = room.fuel > 0
+    elif not room.fire_lit and room.fuel > 0 and on_fire_opportunity is not None:
+        on_fire_opportunity("before_sleep", max(0.25, hours_of_night - hour))
     if refusal in ("слишком холодно, чтобы ложиться", "сначала нужно согреться") and room.fire_lit:
         # Warm the room first, as Hoarbound's sleep refusal intends: prepare, then sleep.
         waited = 0.0
@@ -125,7 +131,11 @@ def play(option_label: str, outside_c: float, room: Room, body: Body, beliefs: E
                     and fuel_at_ignition > 0 and at > fire_ignition_h):
                 burn_rate_lower_bound = round(fuel_at_ignition / (at - fire_ignition_h), 3)
             if room.fuel > 0 and not room.fire_lit:
-                room.fire_lit = True
+                if automatic_ignition:
+                    room.fire_lit = True
+                elif on_fire_opportunity is not None:
+                    on_fire_opportunity("cold_wake", max(0.25, night_hours - slept - awake_h))
+            if room.fire_lit and room.fuel > 0 and not was_lit:
                 wakes.append({"at": round(at, 1), "core_c": round(woke_at_c, 1), "did": "разжёг остаток дров"})
                 log.append(f"{at:4.1f} ч: проснулся от холода ({woke_at_c:.1f}°) — разжёг остаток дров")
                 asleep = False
