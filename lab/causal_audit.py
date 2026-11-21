@@ -166,6 +166,8 @@ def analyze(seeds: int = 30, days: int = HORIZON) -> dict:
         colder_next_dawn = []
         fuel_next_dawn = []
         first_day_cores = []
+        remaining_fuel_behind = []
+        last_day_no_trip_with_remaining = 0
         relative_days = Counter()
         weather_pairs = 0
         for key, cases in results.items():
@@ -176,6 +178,11 @@ def analyze(seeds: int = 30, days: int = HORIZON) -> dict:
             relative_days[changed["days_completed"] - baseline["days_completed"]] += 1
             choices.update(d["evening"]["chose"][0] for d in changed["history"])
             if changed["history"]:
+                last = changed["history"][-1]
+                remaining = sum(last["remaining_loot"].values())
+                remaining_fuel_behind.append(remaining)
+                if last["day_trip"]["target"] is None and remaining > 0:
+                    last_day_no_trip_with_remaining += 1
                 first_day_cores.append(changed["history"][0]["core_next_dawn"])
                 fuel_next_dawn.append(changed["history"][0]["fuel_next_dawn"])
             for d0, d1 in zip(baseline["history"], changed["history"]):
@@ -191,6 +198,9 @@ def analyze(seeds: int = 30, days: int = HORIZON) -> dict:
             "evening_choices": dict(sorted(choices.items())),
             "paired_days_difference": dict(sorted(relative_days.items())),
             "paired_weather_days_compared": weather_pairs,
+            "mean_unused_world_loot_at_end": round(statistics.mean(remaining_fuel_behind), 3),
+            "runs_with_unused_world_loot_at_end": sum(v > 0 for v in remaining_fuel_behind),
+            "runs_not_travelling_on_last_day_despite_unused_loot": last_day_no_trip_with_remaining,
         }
 
     # Separate environmental dominance from differences between player priors.
@@ -223,6 +233,15 @@ def analyze(seeds: int = 30, days: int = HORIZON) -> dict:
                         sum(day["fuel_at_dawn"] <= 0 for day in r["history"])
                         for r in subset
                     ), 3),
+                    "mean_uncollected_loot_at_end": round(statistics.mean(
+                        sum(r["history"][-1]["remaining_loot"].values())
+                        for r in subset
+                    ), 3),
+                    "last_day_no_trip_with_loot_count": sum(
+                        r["history"][-1]["day_trip"]["target"] is None
+                        and any(x > 0 for x in r["history"][-1]["remaining_loot"].values())
+                        for r in subset
+                    ),
                 }
     profile_pairs = {}
     for variant in VARIANTS:
@@ -331,6 +350,14 @@ def main() -> None:
     print("Baseline by variant/profile:", result["by_variant_and_profile"])
     print("Paired novice versus local:", result["same_seed_profile_comparison"])
     print("Seed 1 side-by-side profiles:", result["seed1_profile_examples"])
+    print("Unused loot and inactive targets by arm:", {
+        name: {
+            k: row[k] for k in (
+                "runs_with_unused_world_loot_at_end",
+                "mean_unused_world_loot_at_end",
+                "runs_not_travelling_on_last_day_despite_unused_loot")
+        } for name, row in result["arms"].items()
+    })
     print("Paired weather mismatches:", result["checks"]["weather_mismatches_across_paired_cases"])
     print("True alternative actions:", {
         k: v for k, v in result["counterfactual_evening"].items()
