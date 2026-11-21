@@ -131,13 +131,15 @@ def step_body(body: Body, room: Room, outside_c: float, hours: float, asleep: bo
             else:
                 lo = mid
         used = hi
-        room.fuel, room.heated_offset_c, room.fire_lit = previous
+        (room.fuel, room.heated_offset_c, room.fire_lit,
+         room.burned_fuel_total, room.fire_hours_total) = previous
         room.step(used)
     step_core(body, room.felt_c(outside_c), used)
     billed = body.last_step_hours
     if billed < used - 1e-8 and previous is not None:
         # Numerical boundary: refund the last microscopic partial interval.
-        room.fuel, room.heated_offset_c, room.fire_lit = previous
+        (room.fuel, room.heated_offset_c, room.fire_lit,
+         room.burned_fuel_total, room.fire_hours_total) = previous
         room.step(billed)
     step_fatigue(body, billed, asleep=asleep, per_hour=fatigue_per_h)
     return billed
