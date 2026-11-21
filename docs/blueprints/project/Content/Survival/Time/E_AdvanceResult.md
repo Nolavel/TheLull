@@ -2,7 +2,7 @@
 
 Package: /Game/Survival/Time/E_AdvanceResult
 AssetType: Blueprint Enumeration
-DependsOn: none
+DependsOn: none. Consumers: BP_SurvivalWorld, BP_F00ClockProbe, L_SurvivalCore.
 Status: NEEDS REVIEW; no UE/MCP/PIE verification, 21.11.2026.
 
 Create Content Browser → Blueprints → Enumeration with EXACT entries in this order:

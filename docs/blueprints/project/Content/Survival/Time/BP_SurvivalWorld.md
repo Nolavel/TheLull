@@ -6,7 +6,7 @@ Mirror: `docs/blueprints/project/Content/Survival/Time/BP_SurvivalWorld.md` → 
 **Статус: revised draft, 21.11.2026; NEEDS RE-REVIEW.** Не создан в UE. Точный тип/пин и операции MCP подтвердить локально в UE 5.8.4; [backlog](../../../BACKLOG.md). Ревью [Claude Cloud #3](https://github.com/Nolavel/TheLull/issues/3#issuecomment-7059415969).
 
 ParentClass: Actor
-DependsOn: ST_SimStep, E_SimPhase, E_AdvanceResult, BPI_SimStepReceiver, Gameplay Tags settings
+DependsOn: ST_SimStep, E_SimPhase, E_AdvanceResult, BPI_SimStepReceiver, Config/DefaultGameplayTags.ini
 PlacedIn: /Game/Maps/L_SurvivalCore (1 instance, persistent level, no runtime spawn in F00).
 
 ## Создание
@@ -37,10 +37,11 @@ UnregisterParticipant(Participant: Object Reference) -> bRemoved: Boolean
 AdvanceGameTime(DeltaGameSeconds: Float (double precision), Reason: Gameplay Tag) -> Result: E_AdvanceResult
 RestoreWorldTime(RestoredSeconds: Float (double precision)) -> bRestored: Boolean
 IsSimulationFaulted() -> bFaulted: Boolean
+IsTimeDispatching() -> bDispatching: Boolean
 GetLastAdvanceResult() -> Result: E_AdvanceResult
 OnTimeAdvanceFinished(NewTimeSeconds: Float (double precision), Reason: Gameplay Tag) // Event Dispatcher
 ```
-GetWorldTimeSeconds, IsClockReady, IsSimulationFaulted and GetLastAdvanceResult pure, others impure. Getter before ready returns 0; caller must check IsClockReady first. Helpers below Private functions. 
+GetWorldTimeSeconds, IsClockReady, IsSimulationFaulted, IsTimeDispatching and GetLastAdvanceResult pure, others impure. Getter before ready returns 0; caller must check IsClockReady first. Helpers below Private functions. 
 ## Event graph
 ```text
 event BeginPlay() {
@@ -58,6 +59,7 @@ function CheckUniqueClock() -> bUnique {
 function IsClockReady() -> bReady { return bReady }
 function GetWorldTimeSeconds() -> Value { return WorldTimeSeconds }
 function IsSimulationFaulted() -> bFaulted { return bFaulted }
+function IsTimeDispatching() -> bDispatching { return bIsAdvancing || bIsRegistering }
 function GetLastAdvanceResult() -> Result { return LastAdvanceResult }
 function InitializeNewGame() -> bInitialized {
     if (bReady || bIsAdvancing || bIsRegistering || bFaulted) return Reject("already initialized or busy")
@@ -76,7 +78,7 @@ function RestoreWorldTime(RestoredSeconds) -> bRestored {
     return true
 }
 function RegisterParticipant(Participant) -> bRegistered {
-    if (NOT bReady || bIsAdvancing || bIsRegistering) return Reject("not ready or busy")
+    if (NOT bReady || bIsAdvancing || bIsRegistering || bFaulted) return Reject("not ready, busy or faulted")
     if (NOT IsValid(Participant)) return Reject("invalid receiver")
     if (NOT DoesImplementInterface(Participant, BPI_SimStepReceiver)) return Reject("missing interface")
     if (Participants.Contains(Participant)) return Reject("duplicate receiver")

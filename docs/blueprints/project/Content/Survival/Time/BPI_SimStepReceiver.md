@@ -5,7 +5,7 @@ AssetType: Blueprint Interface
 Mirror: `docs/blueprints/project/Content/Survival/Time/BPI_SimStepReceiver.md` → `<ProjectRoot>/Content/Survival/Time/BPI_SimStepReceiver.uasset`.
 **Статус: revised draft, 21.11.2026; NEEDS RE-REVIEW.** Не создан в UE. Точный тип/пин и операции MCP подтвердить локально в UE 5.8.4; [backlog](../../../BACKLOG.md). Ревью [Claude Cloud #3](https://github.com/Nolavel/TheLull/issues/3#issuecomment-7059415969).
 
-DependsOn: ST_SimStep, E_SimPhase.
+DependsOn: ST_SimStep, E_SimPhase. Consumers: BP_SurvivalWorld, BPC_SurvivalBody, BP_F00ClockProbe.
 ## Signatures
 ```text
 GetSimPhase() -> Phase: E_SimPhase

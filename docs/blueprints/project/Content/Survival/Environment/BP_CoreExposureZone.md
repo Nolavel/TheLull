@@ -2,7 +2,7 @@
 Package: /Game/Survival/Environment/BP_CoreExposureZone
 AssetType: Blueprint Class
 ParentClass: Actor
-DependsOn: none
+DependsOn: engine Box Collision and stock Third Person Pawn capsule (external; package paths to inspect in editor).
 Status: NEEDS REVIEW / NOT ASSEMBLED / PIE NOT RUN, 21.11.2026. One asset, no Tick.
  
 ## Components and placement

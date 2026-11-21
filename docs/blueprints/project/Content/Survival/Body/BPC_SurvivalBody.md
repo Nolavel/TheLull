@@ -2,7 +2,7 @@
 
 Package: /Game/Survival/Body/BPC_SurvivalBody
 AssetType: Blueprint Class
-DependsOn: ST_CoreVitals, ST_SimStep, BPI_SimStepReceiver, E_SimPhase, BP_SurvivalWorld, BP_CoreExposureZone
+DependsOn: ST_CoreVitals, ST_SimStep, BPI_SimStepReceiver, E_SimPhase, BP_SurvivalWorld, BP_CoreExposureZone; these are all custom asset stencils (see DEPENDENCY_AUDIT.md).
 Status: stencil drafted / NEEDS REVIEW, 21.11.2026. Actual UE 5.8.4 pins/MCP/PIE not verified. [Research](../../../../../gameplay/reference/CORE_BODY_UI_TO_UE.md).
 
 ParentClass: ActorComponent
@@ -21,7 +21,7 @@ ApplyFixtureReplenish(RestAdd01, HydrationAdd01, HungerAdd01: Float(double preci
 SimulateStep(Step:ST_SimStep) -> bApplied:Boolean
 OnVitalsChanged(Snapshot:ST_CoreVitals) // Event Dispatcher
 ```
-InitializeFixture: reject if initialized, invalid clock, zone or !IsClockReady; Set Clock + ExposureZone, RegisterParticipant(Self); on false clear references and return false; set initialized true, query initial exposure via ResolveExposure, update FeelsLikeC/ExposureSource, broadcast Vitals, return true. Spawn outside Box for fresh regression. Phase function always Body. GetVitals returns copy. Inputs accepted only after init, test map calls only while clock idle/manual. Exposure bounds -50..50; additions each 0..1; reject out-of-bounds/nonfinite (positive range comparisons). Set Members in copy then Set Vitals once. For SetFixtureExposure set bOverrideExposure=true and OverrideFeelsLikeC from input, update FeelsLikeC/ExposureSource via ResolveExposure, deltas/hours zero; LastCause="Fixture exposure override". ClearFixtureExposureOverride sets false, refreshes from zone, zeros deltas/hours, broadcasts once; no time/needs change. In manual mode outside these commands the location input is sampled on next clock step, not continuously. Replenish independently Clamp(old+add,0,1); report actual deltas, zero other deltas/hours; LastCause="Fixture replenish". No time write, no health refill. Publish once per accepted operation. Test-only API; not final food/drink/sleep actions.
+InitializeFixture: reject if initialized, invalid clock, zone or !IsClockReady; Set Clock + ExposureZone, RegisterParticipant(Self); on false clear references and return false; set initialized true, query initial exposure via ResolveExposure, update FeelsLikeC/ExposureSource, broadcast Vitals, return true. Spawn outside Box for fresh regression. Phase function always Body. GetVitals returns copy. Inputs accepted only after init, if Clock.IsSimulationFaulted=false, Clock.IsTimeDispatching=false and Clock.IsClockReady=true; test map calls only while clock idle/manual. Every public fixture writer validates these preconditions BEFORE touching any field. Exposure bounds -50..50; additions each 0..1; reject out-of-bounds/nonfinite (positive range comparisons). Set Members in copy then Set Vitals once. For SetFixtureExposure set bOverrideExposure=true and OverrideFeelsLikeC from input, update FeelsLikeC/ExposureSource via ResolveExposure, deltas/hours zero; LastCause="Fixture exposure override". ClearFixtureExposureOverride sets false, refreshes from zone, zeros deltas/hours, broadcasts once; no time/needs change. In manual mode outside these commands the location input is sampled on next clock step, not continuously. Replenish independently Clamp(old+add,0,1); report actual deltas, zero other deltas/hours; LastCause="Fixture replenish". No time write, no health refill. Publish once per accepted operation. Test-only API; not final food/drink/sleep actions.
  
 ## Event graph
 ```text

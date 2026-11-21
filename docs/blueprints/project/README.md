@@ -17,7 +17,8 @@ UE 5.8.4 → Games → Third Person → Blueprint → Variant None. [Epic docs �
 ```text
 project/
 ├── Config/
-│   └── DefaultGameplayTags.ini.md
+│   ├── DefaultGameplayTags.ini.md
+│   └── DefaultEngine.ini.md
 └── Content/
     ├── Maps/
     │   ├── L_SurvivalCore.md
@@ -30,6 +31,7 @@ project/
     │   │   └── BPC_SurvivalBody.md
     │   └── Time/
     │       ├── E_SimPhase.md
+    │       ├── E_AdvanceResult.md
     │       ├── ST_SimStep.md
     │       ├── BPI_SimStepReceiver.md
     │       └── BP_SurvivalWorld.md
@@ -49,6 +51,8 @@ project/
 
 **Уточнение автора 21.11.2026 (заменяет прежний порядок):** сначала ядро survival по The Long Dark, затем минимальный UI и Debug UI с рабочими индикаторами; география только после этого. Штатная Third Person площадка нужна для запуска, не реконструкция квартала. Key West не отменён, но не является зависимостью core. Первичные F01/F02 используют контролируемый температурный вход, полная климатическая модель позднее.
 До локального запуска: предметный core, HUD, Debug. Географию не начинать.
+
+[Dependency audit](DEPENDENCY_AUDIT.md) — read before Cloud review. Config/DefaultEngine.ini is modified only after the real L_SurvivalCore map exists.
 
 ## Порядок
 

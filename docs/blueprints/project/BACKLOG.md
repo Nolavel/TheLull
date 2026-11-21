@@ -36,6 +36,10 @@
 - **DESIGN-002 | OPEN:** official Hinterland status description includes Condition recovery when needs not critical; current draft omits passive recovery. Decide when rest/recovery mechanics added, do not claim exact TLD balance.
 - **CORE-004 | OPEN:** реальные ресурсы/действия/thermal zones. Mock replenishment не gameplay. Географию не начинать до рабочего ядра.
  
+- **AUDIT-001 | NEEDS REVIEW:** static dependency self-audit of all active stencils, enum output propagation, real DefaultEngine.ini map setting, body fixture writer guards. See DEPENDENCY_AUDIT.md. Cloud re-review and actual UE/MCP/PIE still OPEN.
+- **F00-005 | NEEDS REVIEW:** E_AdvanceResult, BPI.SimulateStep bApplied, PartialFailure terminal; not atomic across receivers; test failure fixture pending.
+- **F00-006 | NEEDS REVIEW:** post-init Restore rejected until owner load coordinator; test current probe contract.
+
 ## Шаблон каждой новой записи (пополняет Claude Local после операции MCP)
 
 ```text

@@ -24,7 +24,7 @@ PlacedIn: L_SurvivalCore (one instance, bRunProbe=false normally).
 | StepCallCount | Integer | 0 |
 | PhaseReadCount | Integer | 0 |
 | bPassed | Boolean | true |
-| bStepOK | Boolean | true |
+
 
 Only first four flags Instance Editable; other variables private. Tick off. Map Level Blueprint skips initialization only when exactly one opt-in probe exists; probe then owns test startup (see level).
 ## Event graph
@@ -120,7 +120,7 @@ function RunChecks() {
     Check(NOT Clock.RestoreWorldTime(28800.0), "restore after init rejected")
     Check(Clock.GetWorldTimeSeconds() == StartSeconds + 4500.25 && StepCallCount == 6, "post-init restore unchanged")
     Check(Clock.UnregisterParticipant(Self), "unregister")
-    Check(Clock.AdvanceGameTime(900.0, Time.Advance.Debug), "advance without receiver")
+    Check(Clock.AdvanceGameTime(900.0, Time.Advance.Debug) == Completed, "advance without receiver")
     Check(StepCallCount == 6, "no event after unregister")
     PrintResult()
 }

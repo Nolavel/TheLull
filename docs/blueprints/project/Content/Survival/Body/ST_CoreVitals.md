@@ -2,7 +2,7 @@
 
 Package: /Game/Survival/Body/ST_CoreVitals
 AssetType: Blueprint Structure
-DependsOn: none
+DependsOn: none. Consumers: BPC_SurvivalBody, WBP_VitalsHUD, WBP_SurvivalDebug.
 Status: stencil drafted / NEEDS REVIEW, 21.11.2026. Actual UE 5.8.4 pins/MCP/PIE not verified. [Research](../../../../../gameplay/reference/CORE_BODY_UI_TO_UE.md).
 
 Create User Defined Struct. All numeric fields Float (double precision). String fields explicitly marked.

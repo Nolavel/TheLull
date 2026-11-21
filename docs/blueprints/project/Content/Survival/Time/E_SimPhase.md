@@ -5,6 +5,8 @@ AssetType: Blueprint Enumeration
 Mirror: `docs/blueprints/project/Content/Survival/Time/E_SimPhase.md` → `<ProjectRoot>/Content/Survival/Time/E_SimPhase.uasset`.
 **Статус: revised draft, 21.11.2026; NEEDS RE-REVIEW.** Не создан в UE. Точный тип/пин и операции MCP подтвердить локально в UE 5.8.4; [backlog](../../../BACKLOG.md). Ревью [Claude Cloud #3](https://github.com/Nolavel/TheLull/issues/3#issuecomment-7059415969).
 
+DependsOn: none. Consumers: BPI_SimStepReceiver, BP_SurvivalWorld, BPC_SurvivalBody, BP_F00ClockProbe.
+
 ## Создание
 Content Browser → Add → Blueprint → Enumeration. Имя E_SimPhase. Добавить в указанном порядке:
 ```text
