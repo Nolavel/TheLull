@@ -116,6 +116,7 @@ def run(seed: int, days: int = 3, *, variant: str = "B_readable",
         phase = "morning_shelter"
         ignitions: list[dict] = []
         stove_decisions = []
+        stove_outcomes = []
         pending = None
         last_prompt_at = None
         last_prompt_core = None
@@ -125,6 +126,23 @@ def run(seed: int, days: int = 3, *, variant: str = "B_readable",
             if pending is None:
                 return
             d, when, before_burn, before_fire_hours, before_core = pending
+            outcome = {
+                "decision_index": len(stove_decisions) - 1,
+                "observed_at_elapsed_minute": round(body.elapsed_minutes, 5),
+                "elapsed_since_decision_h": round(
+                    (body.elapsed_minutes - when) / 60.0, 5
+                ),
+                "observed_core_delta_c": round(body.core_c - before_core, 5),
+                "realized_fuel_burned": round(
+                    room.burned_fuel_total - before_burn, 5
+                ),
+                "realized_fire_hours": round(
+                    room.fire_hours_total - before_fire_hours, 5
+                ),
+                "fuel_after": round(room.fuel, 5),
+                "next_intention": plan.name,
+            }
+            stove_outcomes.append(outcome)
             d.outcome = (
                 f"наблюдение через {(body.elapsed_minutes - when) / 60.0:.2f} ч: "
                 f"тело {before_core:.2f}→{body.core_c:.2f}°C; "
@@ -302,6 +320,7 @@ def run(seed: int, days: int = 3, *, variant: str = "B_readable",
             "fuel_at_dawn": round(fuel_at_dawn, 3),
             "fuel_at_departure": round(fuel_at_departure, 3),
             "stove_decisions": [asdict(d) for d in stove_decisions],
+            "stove_outcomes": stove_outcomes,
             "fuel_burned_today": round(
                 room.burned_fuel_total - fuel_burned_at_dawn, 5
             ),
@@ -330,6 +349,7 @@ def run(seed: int, days: int = 3, *, variant: str = "B_readable",
                 "empty_searches": day_record.empty_searches,
                 "terminal_minute": day_record.terminal_minute,
                 "events": day_record.events,
+                "next_intention": day_record.next_intention,
                 "decisions": [asdict(d) for d in day_record.decisions],
             },
             "evening": {
