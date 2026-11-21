@@ -1,0 +1,46 @@
+name: clothing-adaptation-intent
+
+on:
+  push:
+    branches: [ue-codex]
+    paths:
+      - "lab/**"
+      - ".github/workflows/clothing-adaptation-intent.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  voluntary-drying-and-second-action:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Validate learned route, voluntary choice, paid recovery
+        run: python3 -m unittest lab.tests.test_clothing_adaptation -v
+      - name: Matched novice/local evidence on 4 distances and 3 weather worlds
+        run: |
+          mkdir -p results
+          python3 -m lab.clothing_adaptation_study --seeds 30 --json results/clothing-adaptation.json | tee results/summary.json
+          python3 - <<'PY' | tee -a "$GITHUB_STEP_SUMMARY"
+          import json
+          r=json.load(open("results/clothing-adaptation.json",encoding="utf-8"))
+          print("## D1.5 — Learned route vs dry clothing and subsequent stamina task")
+          print(f"Cases: {r['design']['cases']} (3 worlds × 2 profiles × 4 distances × {r['design']['seeds']} seeds).")
+          print("The first training route is wet by experimental control; AFTER that only actual wet trip results update beliefs.")
+          print("The belief-only second choice uses the SAME starting Body/Room; the follow-up action uses the real post-trip Body.")
+          print("### Observed outcomes")
+          for key,value in sorted(r["counts"].items()):
+              print(f"- {key}: {value}")
+          print("\nContract checks:",r["checks"])
+          print("A simulation of decision learning, NOT a full two-day physical playthrough or fun study.")
+          assert all(v==0 for v in r["checks"].values()),r["checks"]
+          PY
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: clothing-adaptation-and-stamina-followup
+          path: results/
