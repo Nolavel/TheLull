@@ -329,6 +329,20 @@ def analyze(seeds: int = 30, days: int = HORIZON) -> dict:
                 "mean_days": _mean(group, "days"),
                 "mean_first_morning_core_c": _mean(group, "first_dawn_end_core_c"),
                 "runs_ever_hitting_temperature_floor": sum(x["ever_hit_temperature_floor"] for x in group),
+                "runs_hitting_floor_before_first_dusk": sum(
+                    x["first_floor_absolute_h"] is not None and
+                    x["first_floor_absolute_h"] < (12.0 if arm == "dusk_two_hours_later" else 10.0)
+                    for x in group
+                ),
+                "runs_hitting_floor_within_first_24h": sum(
+                    x["first_floor_absolute_h"] is not None and
+                    x["first_floor_absolute_h"] < 24.0
+                    for x in group
+                ),
+                "runs_reaching_horizon_without_floor": sum(
+                    x["first_floor_absolute_h"] is None and x["days"] == days
+                    for x in group
+                ),
                 "runs_rewarming_after_floor": sum(x["post_floor_rewarming_steps"] > 0 for x in group),
                 "mean_h_to_first_floor_among_hits": round(mean(
                     x["first_floor_absolute_h"] for x in group
@@ -446,6 +460,8 @@ def main() -> None:
             "first_evening_with_any_viable_forecast":
                 z["first_evening_with_any_viable_forecast"],
             "runs_rewarming_after_floor": z["runs_rewarming_after_floor"],
+            "runs_hitting_floor_before_first_dusk": z["runs_hitting_floor_before_first_dusk"],
+            "runs_reaching_horizon_without_floor": z["runs_reaching_horizon_without_floor"],
             "mean_h_to_first_floor_among_hits": z["mean_h_to_first_floor_among_hits"],
             "mean_h_unchecked_after_floor_among_hits": z["mean_h_unchecked_after_floor_among_hits"],
             "first_floor_phases": z["first_floor_phases"],
