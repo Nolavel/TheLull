@@ -16,10 +16,10 @@ from statistics import mean
 
 from .agent import Agent
 from .body import DEATH_C, Body
-from .evening import Room, Tomorrow, UNDECIDED, choose, step_body
+from .evening import Room, Tomorrow, UNDECIDED, SHORT_WALK, choose, options, step_body
 from .evening_run import play
 from .heat_choice import LIGHT, DecisionProvider, make_heat_decision
-from .sim import DEPART_AFTER_DAWN_MIN, DayRecord, clock, run_day
+from .sim import DEPART_AFTER_DAWN_MIN, DayRecord, Decision, clock, run_day
 from .world import DAY_MINUTES, World
 
 STEP_H = 0.25
@@ -71,7 +71,8 @@ def run(seed: int, days: int = 3, *, variant: str = "B_readable",
         profile: str = "local", intentions: list[Tomorrow] | None = None,
         initial_furniture: int = 2, recheck_policy: bool = True,
         heating_policy: str = "dusk",
-        decision_provider: DecisionProvider | None = None) -> dict:
+        decision_provider: DecisionProvider | None = None,
+        carry_night_intent: bool = False) -> dict:
     """Advance one shared state. Partial days are NOT credited as dawns."""
     if days < 1:
         raise ValueError("days must be positive")
@@ -88,6 +89,7 @@ def run(seed: int, days: int = 3, *, variant: str = "B_readable",
     loot_rng = random.Random(f"{seed}:loot")
     history = []
     end_reason = None
+    from_previous_night = None
 
     for day in range(1, days + 1):
         weather = world.roll_weather(random.Random(f"{seed}:weather:{day}"))
@@ -101,11 +103,19 @@ def run(seed: int, days: int = 3, *, variant: str = "B_readable",
         fire_hours_at_dawn = room.fire_hours_total
         day_record = DayRecord(day=day, fuel_morning=room.fuel)
         plan = intentions[(day - 1) % len(intentions)] if intentions else UNDECIDED
+        arriving_intent = from_previous_night
+        # Preserve the author's explicit plans. Under the opt-in experiment
+        # only, a disrupted night can revise an otherwise undecided next day.
+        if (carry_night_intent and not intentions and arriving_intent is not None
+                and arriving_intent["wants_recovery"]):
+            plan = SHORT_WALK
         revised = plan
         proposed = None
         why = "до вечернего выбора не дошёл"
         night = None
         learned = "ночных наблюдений нет"
+        evening_trace = None
+        night_next_intent = None
         departure = world.dawn_min + max(
             0, DEPART_AFTER_DAWN_MIN - (15 if body.packed else 0)
         )
@@ -212,10 +222,18 @@ def run(seed: int, days: int = 3, *, variant: str = "B_readable",
 
         if not body.terminal:
             phase = "trip"
-            # Daytime travel, searching and storm waits use THIS same body.
+            # Replanning depends only on last night's OBSERVED wake and present
+            # core/fatigue/fuel. No future weather or inaccessible loot.
+            shelter_recovery = bool(
+                carry_night_intent and arriving_intent is not None
+                and arriving_intent["wants_recovery"]
+                and room.fuel > 0
+                and (body.core_c < 35.8 or body.fatigue > 80.0)
+            )
             day_record, _ = run_day(
                 world, agent, weather, loot_rng, day, fuel_at_departure,
-                body=body, charge_legacy_night=False
+                body=body, charge_legacy_night=False,
+                stay_home_for_recovery=shelter_recovery,
             )
 
         if not body.terminal:
@@ -259,6 +277,25 @@ def run(seed: int, days: int = 3, *, variant: str = "B_readable",
                     daylight_hours=world.daylight_hours,
                     night_hours=actual_night_h
                 )
+                # Single shared actual outcome, not forecast pretending to
+                # be real. Alternatives are forecast from CURRENT beliefs.
+                candidate_options = options(
+                    body, room, agent.beliefs, plan, world.air_temp_c,
+                    daylight_hours=world.daylight_hours,
+                    night_hours=actual_night_h
+                )
+                evening_trace = Decision(
+                    time=clock(world.day_length),
+                    point="вечер",
+                    intention=plan.name,
+                    cues=[f"тело {body.core_c:.2f}°C",
+                          f"усталость {body.fatigue:.1f}",
+                          f"топливо {room.fuel:.2f}",
+                          f"план на завтра: {plan.name}"],
+                    alternatives=candidate_options,
+                    choice=proposed["option"],
+                    reason=why,
+                )
                 if heating_policy == "agent":
                     decide_stove("вечер перед работой", 1.5)
                 night_args = {"hours_of_night": actual_night_h}
@@ -282,6 +319,50 @@ def run(seed: int, days: int = 3, *, variant: str = "B_readable",
                         )
 
         settle_previous()
+        if evening_trace is not None:
+            if night is None:
+                evening_trace.outcome = "ночной цикл не был достигнут"
+            else:
+                evening_trace.outcome = (
+                    f"ночь прошла {night['night_elapsed_h']:.2f} ч; "
+                    f"пробуждений от холода {night['woke_cold']}; "
+                    f"тело {body.core_c:.2f}°C; "
+                    f"усталость {body.fatigue:.1f}; "
+                    f"топливо осталось {room.fuel:.2f}"
+                )
+                evening_trace.belief_update = learned
+
+        # The next goal is formed AFTER experiencing this night. On the
+        # following dawn this exact record becomes observable incoming intent.
+        # It is deliberately a simple policy hypothesis, NOT human agency.
+        if not body.terminal:
+            disrupted = bool(night and (
+                night["woke_cold"] > 0
+                or night.get("sleep_refused") in (
+                    "слишком холодно, чтобы ложиться", "сначала нужно согреться"
+                )
+            ))
+            wants_recovery = disrupted and room.fuel > 0 and (
+                body.core_c < 36.0 or body.fatigue > 75.0
+            )
+            if wants_recovery:
+                intended = "восстановить тепло и силы перед следующей вылазкой"
+                origin = "реальный холод и пробуждения прошлой ночью"
+            elif day_record.next_intention:
+                intended = day_record.next_intention
+                origin = "дневной опыт и проверенные доступные запасы"
+            else:
+                intended = "рассмотреть новый маршрут"
+                origin = "прежняя цель остаётся доступной"
+            night_next_intent = {
+                "intention": intended, "origin": origin,
+                "wants_recovery": wants_recovery,
+                "night_wakes_observed": night["woke_cold"] if night else 0,
+                "core_at_decision_c": round(body.core_c, 4),
+                "fatigue_at_decision": round(body.fatigue, 4),
+                "fuel_at_decision": round(room.fuel, 4),
+            }
+        from_previous_night = night_next_intent
         elapsed_today = body.elapsed_minutes - start_elapsed
         if body.terminal:
             end_reason = body.terminal_reason
@@ -319,6 +400,9 @@ def run(seed: int, days: int = 3, *, variant: str = "B_readable",
             "night_hours": round(actual_night_h, 6),
             "fuel_at_dawn": round(fuel_at_dawn, 3),
             "fuel_at_departure": round(fuel_at_departure, 3),
+            "arriving_intention": arriving_intent,
+            "night_formed_next_intention": night_next_intent,
+            "evening_decision": asdict(evening_trace) if evening_trace else None,
             "stove_decisions": [asdict(d) for d in stove_decisions],
             "stove_outcomes": stove_outcomes,
             "fuel_burned_today": round(
@@ -390,6 +474,7 @@ def run(seed: int, days: int = 3, *, variant: str = "B_readable",
         "terminal_at_minute": body.terminal_at_minute,
         "recheck_policy": recheck_policy,
         "heating_policy": heating_policy,
+        "carry_night_intent": carry_night_intent,
         "decision_source": (
             "human" if decision_provider is not None
             else "agent" if heating_policy == "agent"
@@ -400,6 +485,7 @@ def run(seed: int, days: int = 3, *, variant: str = "B_readable",
             "Partial days are counted in elapsed_minutes, NOT days_completed.",
             "The terminal threshold is a game-model stop, not a physiological prediction.",
             "Heat policies are controlled counterfactuals, not a validated agent choice.",
+            "Night-to-dawn replan is opt-in experimental policy, not human intent.",
             "Daytime choices still optimize fuel, not water/food.",
             "A fixed dawn+dusk schedule, no interpolated weather across midnight.",
             "No resource respawn or balance calibration.",
