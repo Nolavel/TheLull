@@ -18,7 +18,10 @@ from .evening import (COOLING_RATE_C_PER_H, EXPEDITION, HEAVY, HOURS_OF_NIGHT, H
 OUTSIDE_C = -18.0  # Hoarbound's reference exposure figure; placeholder, not TheLull balance
 
 
-def play(option_label: str, outside_c: float, room: Room, body: Body, beliefs: EveningBeliefs) -> dict:
+def play(option_label: str, outside_c: float, room: Room, body: Body, beliefs: EveningBeliefs,
+         *, hours_of_night: float = HOURS_OF_NIGHT) -> dict:
+    if hours_of_night <= 0:
+        raise ValueError("night duration must be positive")
     work = {"A": HEAVY, "B": None, "C": SEAL, "D": PACK}[option_label[0]]
     if work is HEAVY and (not room.has_axe or room.furniture <= 0):
         raise ValueError("нельзя разобрать мебель без топора и доступной мебели")
@@ -76,7 +79,7 @@ def play(option_label: str, outside_c: float, room: Room, body: Body, beliefs: E
     if refusal:
         log.append(f"{hour:4.1f} ч: лечь не вышло — {refusal}")
 
-    night_hours = max(0.0, HOURS_OF_NIGHT - hour)
+    night_hours = max(0.0, hours_of_night - hour)
     fire_out_at, coldest, hypo_hours = None, body.core_c, 0.0
     slept, awake_h, wakes = 0.0, 0.0, []
     burn_rate_lower_bound = None
@@ -140,12 +143,13 @@ def play(option_label: str, outside_c: float, room: Room, body: Body, beliefs: E
                f"спал {slept:.1f} ч" + (f", не спал {awake_h:.1f} ч" if awake_h else ""))
 
     observed_burn_rate = None
-    fire_elapsed = HOURS_OF_NIGHT - fire_ignition_h
+    fire_elapsed = hours_of_night - fire_ignition_h
     if room.fire_lit and not wakes and fuel_at_ignition > room.fuel and fire_elapsed > 0.25:
         observed_burn_rate = round((fuel_at_ignition - room.fuel) / fire_elapsed, 3)
 
     return {"option": option_label, "observed_burn_rate": observed_burn_rate,
             "burn_rate_lower_bound": burn_rate_lower_bound,
+            "night_elapsed_h": round(hours_of_night, 2),
             "slept_hours": round(slept, 1), "awake_at_night_h": round(awake_h, 1),
             "woke_cold": len(wakes), "wake_events": wakes, "went_to_bed_at": round(hour, 1),
             "fire_out_at": round(fire_out_at, 1) if fire_out_at is not None else None,
@@ -158,7 +162,7 @@ def play(option_label: str, outside_c: float, room: Room, body: Body, beliefs: E
 
 def fresh(cooling: float, fuel: int = 3, recovery: float = RECOVERY_PER_H
           ) -> tuple[Room, Body, EveningBeliefs]:
-    return (Room(cooling_rate=cooling, fuel=fuel), Body(recovery_per_h=recovery),
+    return (Room(cooling_rate=cooling, fuel=fuel), Body(fatigue=45.0, recovery_per_h=recovery),
             EveningBeliefs(cooling_rate_est=COOLING_RATE_C_PER_H, recovery_est=recovery))
 
 
