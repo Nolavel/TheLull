@@ -7,6 +7,10 @@
 
 ## Unreleased
 
+### Clarification (Codex / Claude Cloud / Claude Local, 21.11.2026)
+
+- Уточнены роли в уставах, манифесте и трафаретах: Codex готовит контракты и владеет lab; Local собирает реальный проект через MCP, проверяет и ведёт backlog; Cloud готовит техническую инфраструктуру/ревью, затем независимо сверяет доступные результаты. Локальный blocker не блокирует облачную подготовку. Лимит MD и сокращение квартала не утверждены. Codex / ue-codex; только документы, production не изменён.
+
 ### Decision (production: манифест, шаблон Third Person, квартал Key West, 21.11.2026)
 
 - Публикуем **только документацию**: [манифест](docs/gameplay/SURVIVAL_MANIFEST.md), [зеркальный UE-проект](docs/blueprints/project/README.md), атомарную сборку Claude Code через Unreal MCP и backlog. Python lab, CI и остальные изменения Codex в production не переносим этим коммитом.

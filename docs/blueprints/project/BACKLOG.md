@@ -1,6 +1,6 @@
 # TheLull — Blueprint build backlog (Claude Code / Unreal MCP)
 
-**Статус: ожидает реального билда.** Первичная структура подготовлена Codex; **результатов проверки редактора пока нет**. После начала сборки Claude дополняет этот файл **только в своей ветке `ue-claudeflow`**, предварительно получив утверждённую копию stencil через `production` или явный handoff по правилам `AGENTS.md`. Нельзя редактировать ветку Codex или объявлять результат по списку MD-файлов.
+**Статус: ожидает реального билда.** Первичная структура подготовлена Codex; **результатов проверки редактора пока нет**. После начала сборки Claude Local дополняет этот файл **только в своей ветке `ue-claudeflow`**, предварительно получив утверждённую копию stencil через `production` или явный handoff по правилам `AGENTS.md`. Нельзя редактировать ветку Codex или объявлять результат по списку MD-файлов.
 
 Источники критериев: [манифест](../../gameplay/SURVIVAL_MANIFEST.md), [структура mirror](README.md), [Epic UE 5.8](https://dev.epicgames.com/documentation/en-us/unreal-engine), [Blueprint API 5.8](https://dev.epicgames.com/documentation/en-us/unreal-engine/BlueprintAPI).
 
@@ -18,7 +18,7 @@
 
 **Эти пункты не являются обнаруженными ошибками проекта.** Это открытые проверки, которые должны быть закрыты положительным или отрицательным доказательством.
 
-## Шаблон каждой новой записи (пополняет Claude после операции MCP)
+## Шаблон каждой новой записи (пополняет Claude Local после операции MCP)
 
 ```text
 ID: F00-###
@@ -34,14 +34,17 @@ Manifest deviation: core loop / authoritative state / integration / repeated cos
 Severity: blocker | major | minor | improvement
 Root cause: confirmed | hypothesis | unknown
 Proposed change: ...
-Owner: Claude | Codex | author
+Reporter: Claude Local | Claude Cloud
+Owner: Claude Local | Claude Cloud | Codex | author
 Status: OPEN | BLOCKED | FIXED | VERIFIED | DEFERRED
 Next review:...
 ```
 
 ## Честный цикл обратной связи
 
-- После **каждого** реально собранного ассета Claude проверяет его, не откладывая на конец всех систем; пишет подтверждённый mismatch или улучшение с evidence.
+Claude Local фиксирует самопроверку на реальном UE; Claude Cloud отдельно добавляет замечания к переданному SHA/артефактам, не подменяя PIE и не закрывая локальные проверки по одному тексту. До сборки blockers окружения не запрещают работу Codex над согласованными трафаретами.
+
+- После **каждого** реально собранного ассета Claude Local проверяет его, не откладывая на конец всех систем; пишет подтверждённый mismatch или улучшение с evidence.
 - Под `FIXED` понимается изменение реального asset или MD в ветке владельца; `VERIFIED` требует повторного Compile/Save/PIE где уместно.
 - Изменение публичного контракта типа/pin/path не выполняется молча: Claude передаёт Codex precise feedback, Codex правит stencil в `ue-codex`, только автор решает слияние в `production`. Отрицательные результаты сохраняются.
 - Backlog проверяется **против четырёх требований манифеста**: игрок/loop, источники TLD+жанр+Hoarbound+Key West, UE API/владельцы, причинные PIE/живые тесты. Факт успешного Compile — не proof of gameplay.

@@ -9,6 +9,14 @@
 - [Текстовое зеркало проекта](docs/blueprints/project/README.md): один MD на один asset/config; совпадение с реальными Content/Config. Вложенные папки — наше соглашение, не требование UE; не дублировать штатные файлы шаблона и не плодить структуру впрок.
 - Claude Code в открытом UE через фактически доступный Unreal MCP: preflight, один asset, Compile/Save/inspect/PIE, expected vs actual, [BACKLOG](docs/blueprints/project/BACKLOG.md) в ue-claudeflow и handoff Codex. Неподдержанные операции — BLOCKED. Справка [Epic UE 5.8](https://dev.epicgames.com/documentation/en-us/unreal-engine?application_version=5.8) и [Blueprint API](https://dev.epicgames.com/documentation/en-us/unreal-engine/BlueprintAPI?application_version=5.8); проверить селектор версии и реальный hotfix 5.8.4. Не выдавать MD или Python за UE-реализацию.
 
+### Кто именно работает с трафаретами
+
+Обязательное разграничение: [CLAUDE.md — Codex / Claude Cloud / Claude Local](CLAUDE.md).
+- **Codex** исследует и подготавливает MD по манифесту, исправляет их по handoff; единственный владелец lab.
+- **Claude Local** собирает локальный проект через MCP, проверяет реальный UE, ведёт первичный backlog в `ue-claudeflow`.
+- **Claude Cloud** готовит техническое обеспечение, отдельно ревьюит контракты и полученные результаты; отсутствие локального редактора не останавливает подготовительную работу и не даёт Cloud полномочия менять scope.
+- Самопроверка Local не независимое ревью; Cloud review — дополнительный слой, не новая обязательная блокировка каждого asset. Активация локального этапа — по готовности окружения и запуску автора.
+
 ## Ветки — строгое правило
 
 Один агент — одна постоянная ветка. Агенты никогда не делят рабочую ветку.

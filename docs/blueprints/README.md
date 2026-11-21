@@ -28,22 +28,24 @@ Manifest + official Epic 5.8 + TLD/Hoarbound/Key West findings
                           ↓
 Codex: one MD = one exact asset path + class + pins + graph + test
                           ↓ commit SHA of stencil
-Claude Code: preflight .uproject + installed UE 5.8.4 + actual Unreal MCP
+Claude Local: preflight .uproject + installed UE 5.8.4 + actual Unreal MCP
                           ↓
 one asset via MCP → Compile → Save → inspect actual nodes → PIE/automation
                           ↓
 actual .uasset/.umap/.ini + logs + expected-vs-actual report
                           ↓
-Claude: project/BACKLOG.md (in own ue-claudeflow branch)
+Claude Local: project/BACKLOG.md (in own ue-claudeflow branch)
                           ↓
 Codex: update affected stencil in ue-codex after handoff
                           ↓
 author approves integration → next asset / F01...
 ```
 
-**После каждого asset, а не в конце проекта:** Claude сверяет все запланированные variables/types/defaults, node/pin links, parent, package, ownership/save, соседние контракты, компиляцию и реальные тесты. Проблема MCP, невозможность построения графа и неизвестные классы — явный `BLOCKED`, а не самодельная замена.
+**После каждого asset, а не в конце проекта:** Claude Local сверяет все запланированные variables/types/defaults, node/pin links, parent, package, ownership/save, соседние контракты, компиляцию и реальные тесты. Проблема MCP, невозможность построения графа и неизвестные классы — явный `BLOCKED`, а не самодельная замена.
 
 [**Журнал расхождений и улучшений (backlog)**](project/BACKLOG.md) содержит `Expected` vs `Actual`, доказательства из редактора, ссылки на docs UE 5.8, severity, проявление для core loop, решение и owner. Пока проверки не выполнены, все пункты `NOT RUN`. Claude **не редактирует ветку Codex**: результаты публикует в своей ветке, затем делает точный handoff. В `production` никто не сливает без решения автора.
+
+Claude Cloud готовит инструменты сверки до появления редактора и проводит отдельное инженерное ревью по переданным артефактам после сборки; это не замена локальной самопроверке и backlog. Пока локальная среда не готова, Codex продолжает работу над ближайшими зависимостями, Cloud — над технической подготовкой. [Роли](../../CLAUDE.md).
 
 Старый [`BP_LogicTest.md`](BP_LogicTest.md) остаётся историческим примером формата, **не частью F00**. Текущий `tools/check_stencil.py` способен сравнивать только `Event graph` Blueprint Class с текстовым выводом `uasset`, и **не** является универсальной проверкой Struct/Interface/Level/Config или доказательством PIE. Проверка по самому актуальному Unreal MCP/редактору обязательна; эвристика `rust-uasset` — дополнение.
 
