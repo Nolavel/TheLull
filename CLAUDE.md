@@ -30,6 +30,14 @@ Claude работает как технический директор: иссл
 3. **Сделать:** согласованное решение без лишних абстракций; доказать проверкой, которая падает
    на старом поведении.
 
+## Роль локального Claude Code при сборке трафаретов
+
+По авторскому решению облачный Codex описывает ассеты в [`docs/blueprints/project/`](docs/blueprints/project/README.md) — это текстовое зеркало реального `Content/`/`Config/`, **один MD на один asset/config**. Claude Code — **исполнитель сборки** этих контрактов через подключённый Unreal MCP в фактически открытом UE 5.8.4, а затем независимый проверяющий на соответствие [манифесту survival](docs/gameplay/SURVIVAL_MANIFEST.md).
+
+Перед построением Claude обязан проверить путь и версию `.uproject`, реальные assets, текущий MCP capability list, официальные [документы Epic 5.8](https://dev.epicgames.com/documentation/en-us/unreal-engine) и [Blueprint API 5.8](https://dev.epicgames.com/documentation/en-us/unreal-engine/BlueprintAPI). Затем **атомарно** создать, Compile, Save, inspect, выполнить PIE там, где требуется. Нет необходимой MCP-функции или данных редактора — `BLOCKED`, не заявлять `assembled`.
+
+После каждого ассета: сравнить ожидаемый MD с фактическим `.uasset`/PIE, занести ошибки, неопределённости и предложения улучшений в [`docs/blueprints/project/BACKLOG.md`](docs/blueprints/project/BACKLOG.md) **в своей ветке `ue-claudeflow`**. У каждой записи evidence, Epic link, место в core loop, owner и статус. Исправления самих трафаретов передать Codex в handoff; ветку `ue-codex` не править, в `production` без решения автора не сливать. Если зеркало ещё не вошло в `production`, сначала получить согласованный snapshot/handoff от автора, не смешивая агентские ветки молча.
+
 ## Готово, когда
 
 - Результат проверен сценарием из репозитория (см. «Воспроизводимость» в `AGENTS.md`).
