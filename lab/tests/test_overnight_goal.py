@@ -108,6 +108,22 @@ class GoalOvernightContracts(unittest.TestCase):
         self.assertTrue(day["day_trip"]["went_out"])
         self.assertEqual(audit_history(r)["checks"],{})
 
+    def test_night_causal_contrast_controls_for_deadline_clock(self):
+        story=run(1,3,variant="A_safe",profile="local",
+                  initial_fuel=2,goal_policy="adaptive",
+                  initial_goal=PROTECT)
+        changed=[
+            d["goal_continuity"] for d in story["history"]
+            if d["completed_dawn"] and
+               d["goal_continuity"]["physical_night_changed_pressure"]
+        ]
+        self.assertTrue(changed)
+        for x in changed:
+            self.assertNotEqual(x["after_night"]["goal"],
+                                x["time_only_control_pressure"]["goal"])
+            self.assertTrue(x["no_future_weather_used"])
+            self.assertIsNotNone(x["next_dawn_time_only_control_preview"])
+
     def test_missed_deadline_does_not_produce_unavailable_work_goal(self):
         w=World.load("district_v0","A_safe")
         b=Body(core_c=36.8,stamina=85,elapsed_minutes=3000)
