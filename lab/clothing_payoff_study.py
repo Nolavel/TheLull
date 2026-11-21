@@ -159,6 +159,9 @@ def study(seeds: int = 30) -> dict:
     illustrative = {}
     conditional = Counter()
     agent_choice = Counter()
+    # A preserved meter is not yet a causal gameplay consequence. Record
+    # which channels actually change return success or elapsed route time.
+    ablation_changes = Counter()
     for variant in VARIANTS:
         rows[variant] = {}
         for multiplier in DISTANCE_MULTIPLIERS:
@@ -203,6 +206,20 @@ def study(seeds: int = 30) -> dict:
                         conditional["stamina_improved"] += 1
                     if dry["travel_minutes"] < control["travel_minutes"] - 1e-5:
                         conditional["pace_improved"] += 1
+                for channel, arm in (
+                    ("thermal", "prepared_no_thermal"),
+                    ("stamina", "prepared_no_stamina"),
+                    ("movement", "prepared_no_movement"),
+                ):
+                    alternate = v[arm]
+                    if alternate["completed_return"] != dry["completed_return"]:
+                        ablation_changes[f"{channel}_completion"] += 1
+                    if abs(alternate["elapsed_minutes"] - dry["elapsed_minutes"]) > .001:
+                        ablation_changes[f"{channel}_clock"] += 1
+                    if abs(alternate["stamina_after_route"] - dry["stamina_after_route"]) > .001:
+                        ablation_changes[f"{channel}_stamina"] += 1
+                    if abs(alternate["core_after_route"] - dry["core_after_route"]) > .001:
+                        ablation_changes[f"{channel}_core"] += 1
                 if dry["completed_return"] and v["wet_now"]["completed_return"]:
                     conditional["wet_and_prepped_complete"] += 1
                     if dry["elapsed_minutes"] < v["wet_now"]["elapsed_minutes"]:
@@ -260,6 +277,11 @@ def study(seeds: int = 30) -> dict:
             "prepared_faster_including_work","prep_rescued_trip","prep_lost_trip"
         )},
         "actor_morning_choice": dict(agent_choice),
+        "ablation_causal_changes": {
+            f"{channel}_{metric}": ablation_changes[f"{channel}_{metric}"]
+            for channel in ("thermal","stamina","movement")
+            for metric in ("completion","clock","stamina","core")
+        },
         "checks": {k: checks[k] for k in (
             "fuel","clock","terminal","preparation_not_matched",
             "same_departure","dry_triangular_advantage"
@@ -271,6 +293,7 @@ def study(seeds: int = 30) -> dict:
             "Movement stability is a deterministic walk-time penalty, NOT gameplay responsiveness.",
             "Same-departure physical comparisons isolate clothing benefits; wet_now includes opportunity costs and shifted storm exposure.",
             "An actor uses a hardcoded two-hour imagined trip today and does NOT learn route distance or empirically adjust clothing preferences here.",
+            "Stamina currently affects the remaining stamina/fatigue meters but does NOT gate travel or alter move speed: preserving it is not yet a demonstrated direct success benefit.",
             "Study measures capability and decision mismatch, not fun or human intent.",
         ],
     }
@@ -288,6 +311,7 @@ def main():
         "design":result["design"],
         "observations":result["observations"],
         "actor_morning_choice":result["actor_morning_choice"],
+        "ablation_causal_changes":result["ablation_causal_changes"],
         "checks":result["checks"],
     }, ensure_ascii=False, indent=2))
 
