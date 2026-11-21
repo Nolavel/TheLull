@@ -7,6 +7,12 @@
 
 ## Unreleased
 
+### Clarification (production: Cloud pre-review / Local setup, 21.11.2026)
+
+- Утверждено автором: UE 5.8.4 установлен, MCP не настроен, UE-проект не создан; настройку MCP и создание Third Person Blueprint проекта выполняет Claude Local. Инспекция редактора ещё не проведена.
+- Claude Cloud прежде всего перепроверяет трафареты Codex до передачи Local (SHA, ссылки Epic, типы/pins/зависимости, конкретные замечания и статусы); Codex устраняет замечания, Local забирает согласованный контракт, строит и проверяет UE, ведёт backlog. Cloud может отдельно ревьюить результат сборки. Lab остаётся у Codex; scope квартала и очередь зависимостей не меняются. Только документация, без переноса Python/CI. Codex / production.
+
+
 ### Decision (production: манифест, шаблон Third Person, квартал Key West, 21.11.2026)
 
 - Публикуем **только документацию**: [манифест](docs/gameplay/SURVIVAL_MANIFEST.md), [зеркальный UE-проект](docs/blueprints/project/README.md), атомарную сборку Claude Code через Unreal MCP и backlog. Python lab, CI и остальные изменения Codex в production не переносим этим коммитом.
