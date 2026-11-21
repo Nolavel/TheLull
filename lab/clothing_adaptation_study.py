@@ -153,12 +153,20 @@ def analyse_case(seed: int, variant: str, multiplier: int,
     start_body = Body()
     first = choose_clothing(agent,start_body,room,gear)
     researcher = evaluate(seed,variant,multiplier)
+    # Researcher-only matched BEFORE-knowledge snapshot: compare decisions
+    # under the SAME weather assumption so a changed signal is not wrongly
+    # called learning of route/stamina. The real first decision above remains
+    # made without knowledge of future weather.
+    observed_weather = world.roll_weather(random.Random(f"{seed}:weather:1"))
+    experienced_storm = observed_weather.is_storm(world.dawn_min)
+    matched_before = choose_clothing(
+        agent,Body(),Room(fuel=world.start_fuel),Equipment(wetness=1.0),
+        assume_storm=experienced_storm
+    )
     # Observe only what happened on the deliberately wet *training* outing.
     actual = researcher["arms"]["wet_now"]
     observation = {"observed":False,"learning":"","path_update":None}
     if actual["completed_return"]:
-        weather = world.roll_weather(random.Random(f"{seed}:weather:1"))
-        experienced_storm = weather.is_storm(world.dawn_min)
         before_edge = agent.beliefs.edge_minutes[edge_key("home","house_a")][
             "storm" if experienced_storm else "calm"
         ]
@@ -228,6 +236,7 @@ def analyse_case(seed: int, variant: str, multiplier: int,
                 "profile":profile},
         "exogenous_weather":researcher["weather"],
         "first_intention":asdict(first),
+        "researcher_matched_before_same_weather_assumption":asdict(matched_before),
         "observed_wet_walk":observation,
         "same_initial_state_belief_only_redecision":asdict(after) if after else None,
         "post_trip_second_action":followups,
@@ -245,6 +254,7 @@ def study(seeds: int = 30) -> dict:
     checks=Counter()
     counts=Counter()
     examples={}
+    strict_changes=[]
     for variant in VARIANTS:
         for profile in ("local","novice"):
             for multiplier in DISTANCE_MULTIPLIERS:
@@ -255,12 +265,22 @@ def study(seeds: int = 30) -> dict:
                     if seed==1:
                         examples[key]=row
                     initial=row["first_intention"]
+                    comparison=row["researcher_matched_before_same_weather_assumption"]
                     future=row["same_initial_state_belief_only_redecision"]
                     if future:
                         counts["learned_from_real_return"]+=1
                         if future["choice"]!=initial["choice"]:
-                            counts["belief_only_choice_changed"]+=1
-                            counts[key+":choice_changed"]+=1
+                            counts["choice_changed_with_weather_and_learning"]+=1
+                        if future["choice"]!=comparison["choice"]:
+                            counts["strict_belief_only_choice_changed"]+=1
+                            counts[key+":strict_change"]+=1
+                            if len(strict_changes)<15:
+                                strict_changes.append({
+                                    "case":row["case"],
+                                    "before":comparison,
+                                    "after":future,
+                                    "wet_observation":row["observed_wet_walk"],
+                                })
                         if row["observed_wet_walk"]["observed_edge_minutes"]<=0:
                             checks["unobserved_edge"]+=1
                         if len(future["alternatives"])!=2:
@@ -307,13 +327,14 @@ def study(seeds: int = 30) -> dict:
             "free_time","negative_stamina","free_fuel"
         )},
         "examples":examples,
+        "strict_replan_examples":strict_changes,
         "limits":[
             "Second decision compares SAME original Body/Room with updated beliefs; it is not a simulated next dawn.",
             "The physically continued after-trip task restores observed room heat/fire/fuel and actual garment wetness, but is a separate action-choice probe, not a 2-day playthrough.",
             "One training trip is deliberately wet; subsequent preparation remains voluntary, with no dry counterfactual disclosed to Agent.",
             "The heavy work stamina readiness threshold is a prototype task constraint, not a global mobility exhaustion penalty.",
             "The route is artificially lengthened 1/8/24/40x only for laboratory sensitivity; the experimental route is a committed direct edge, not the shortest alternate street path.",
-            "True future storm is never passed to the chooser. Last observed storm can be used as an explicit, uncertain belief.",
+            "The actor's first decision does NOT know the storm. Researcher-only strict belief contrast holds the storm assumption identical before/after to avoid confusing new weather knowledge with route learning.",
             "No claims about human enjoyment or autonomous fun.",
         ]
     }
