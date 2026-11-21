@@ -100,6 +100,13 @@ class GoalPriorityContractTests(unittest.TestCase):
         self.assertEqual(row["first_intention"]["choice"],CHOP)
         self.assertTrue(row["goal_update"]["changed"])
         self.assertEqual(row["goal_update"]["after"],PROTECT)
+        # Assigned FUEL was already at odds with what the state would have
+        # inferred before chopping. A "replan" from this alone is NOT
+        # proof of learning from the action; separate that baseline.
+        self.assertEqual(row["goal_update"]["pressure_inferred_before_action"]["next_goal"],WORK)
+        self.assertTrue(row["goal_update"]["pressure_truly_changed_after_action"])
+        self.assertEqual(row["decision_chain"]["forecast_committed_before_action"]["option"],CHOP)
+        self.assertEqual(row["decision_chain"]["next_action"],row["next_intentions"]["adapted"]["choice"])
         # Both agents can legitimately choose rest here: after chopping,
         # stamina < 55 makes a second chop unavailable. A revised goal is
         # NOT a promise that every individual case changes the action.
@@ -117,6 +124,21 @@ class GoalPriorityContractTests(unittest.TestCase):
             with self.assertRaises(ValueError):
                 execute(s,action,w)
 
+    def test_same_initial_state_different_actual_outcome_changes_emergent_goal(self):
+        w,a,s=self.setup_state(core=36.8,stamina=85,fuel=1,deadline=240)
+        clone=copy.deepcopy(s)
+        execute(s,CHOP,w)
+        execute(clone,REST,w)
+        self.assertEqual(update_goal(s,WORK)["next_goal"],PROTECT)
+        self.assertEqual(update_goal(clone,WORK)["next_goal"],FUEL)
+
+    def test_disagreement_with_assigned_goal_is_not_counted_as_new_pressure(self):
+        row=case("A_safe",35.4,55,3,0,240,FUEL)
+        self.assertEqual(row["goal_update"]["before"],FUEL)
+        self.assertEqual(row["goal_update"]["pressure_inferred_before_action"]["next_goal"],PROTECT)
+        self.assertTrue(row["goal_update"]["changed"])
+        self.assertFalse(row["goal_update"]["pressure_truly_changed_after_action"])
+
     def test_all_grid_conservation_and_comparisons(self):
         r=study()
         self.assertEqual(r["design"]["distinct_initial_states"],96)
@@ -124,6 +146,8 @@ class GoalPriorityContractTests(unittest.TestCase):
         self.assertEqual(r["checks"],{k:0 for k in r["checks"]},r["checks"])
         self.assertGreater(r["counts"].get("goal_revisions",0),0)
         self.assertGreater(r["counts"].get("goal_caused_next_action_change",0),0)
+        self.assertGreater(r["counts"].get("new_pressure_after_actual_action",0),0)
+        self.assertGreater(r["counts"].get("consequence_changed_goal_and_next_action",0),0)
         self.assertGreater(r["counts"].get("same_state_distinct_first_actions",0),0)
         self.assertEqual(r["design"]["human_participants"],0)
 
