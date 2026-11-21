@@ -19,7 +19,8 @@ REST_LIMIT_MINUTES = 180
 
 
 def followup_work(body: Body, room: Room, world: World, *,
-                  rest_if_tired: bool = True) -> dict:
+                  rest_if_tired: bool = True,
+                  gear: Equipment | None = None) -> dict:
     """Process one difficult home task or defer it without fake progress.
 
     The caller's body/room/elapsed_minutes continue from the actual trip.
@@ -28,7 +29,8 @@ def followup_work(body: Body, room: Room, world: World, *,
     before = body.elapsed_minutes
     before_stamina = body.stamina
     rest_minutes = 0.0
-    gear = Equipment()  # dry reference of an indoor task, no clothing changes
+    gear = gear if gear is not None else Equipment()
+    # Never turn an observed wet garment dry by entering the shelter.
     if body.terminal:
         return {"choice": "unavailable_terminal", "completed": False,
                 "rest_minutes": 0.0, "work_minutes": 0.0,
