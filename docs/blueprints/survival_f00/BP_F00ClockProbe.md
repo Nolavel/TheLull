@@ -28,7 +28,7 @@ PlacedIn: /Game/Maps/Tests/L_F00_TimeLab (ровно 1 instance)
 | `StepCallCount` | Integer | 0 | число вызовов interface event |
 | `bAccepted` | Boolean | false | результат последнего вызова; только тест |
 
-## Event Graph
+## Event graph
 
 ```text
 event BeginPlay() {
