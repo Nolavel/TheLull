@@ -56,7 +56,7 @@ ENVIRONMENT <--> SHELTER / HEAT / WATER / FOOD
 | Предлагаемый Blueprint / Struct | Состояние или API (тип) | Владелец записи; кто читает |
 |---|---|---|
 | `BP_SurvivalWorld` (Actor) | `WorldTimeSeconds: Float (double precision)`; `AdvanceGameTime(DeltaGameSeconds: Float (double precision), Reason: GameplayTag)`; `GetWorldTime` | **Единственный писатель clock**. Все действия вызывают API; UI/свет читают |
-| `ST_SimStep` (Blueprint Struct) | `StartSeconds: Float (double precision)`, `EndSeconds: Float (double precision)`, `DeltaSeconds: Float (double precision)`, `Reason: GameplayTag` | Создаёт мировой clock; systems consume |
+| `ST_SimStep` (Blueprint Struct) | `StartSeconds: Float (double precision)`, `EndSeconds: Float (double precision)`, `Reason: GameplayTag` | Создаёт мировой clock; receiver derives duration End−Start |
 | `BPC_Climate` (ActorComponent на world actor) | `AirTemperatureC: Float`, `WindSpeedMps: Float`, `WindDirection: Vector`, `WeatherState: GameplayTag` | Climate writes; room/route/body read. Погода **не знает** намерение игрока |
 | `BPC_RoomThermal` (ActorComponent на actor комнаты выбранного shelter) | `ZoneId: Name`, `TemperatureC: Float`, `WindExposure01: Float`, `SealedFraction01: Float`, `HeatInput` (поток, пока без предрешённых единиц), `StoredHeat` (внутренняя модель) | Room writes; body и визуализация read. **Тёплая комната**, а не булевое `bIsIndoorSafe` |
 | `BPC_SurvivalBody` (ActorComponent на Henry) | `CoreTemperatureC: Float`, `Calories: Float`, `Hydration: Float`, `Fatigue01: Float`, `Condition01: Float` | Body writes. Подсистемы условий воздействуют через единый update; HUD read-only. Конкретная шкала и пороги — **не баланс из Python** |

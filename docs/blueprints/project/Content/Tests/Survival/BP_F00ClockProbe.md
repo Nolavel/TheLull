@@ -31,6 +31,10 @@ Only first four flags Instance Editable; other variables private. Tick off. Map 
 event BeginPlay() {
     if (NOT bRunProbe) return
     Delay(0.1) // test only; no production initialization depends on delay
+    Set local Probes = GetAllActorsOfClass(BP_F00ClockProbe)
+    Set local ActiveCount = 0
+    for (P in Probes) { if (IsValid(P) && P.bRunProbe) ActiveCount += 1 }
+    if (ActiveCount != 1) { PrintString("F00 FAIL: exactly one active probe required"); return }
     RunChecks()
 }
 event EndPlay(EndPlayReason) {
@@ -105,6 +109,7 @@ function RunChecks() {
         for (I in 0..3) Check(Clock.AdvanceGameTime(900.0, Time.Advance.Debug), "quarter hour accepted")
     }
     Check(Clock.GetWorldTimeSeconds() == StartSeconds + 3600.0, "target reached")
+    PrintString(FormatText("F00 hour: start={StartSeconds}, final={Clock.GetWorldTimeSeconds()}, calls={StepCallCount}, total={TotalReceivedSeconds}"))
     Check(StepCallCount == 4 && NearlyEqual(TotalReceivedSeconds,3600.0,0.00001), "four intervals")
     Check(PhaseReadCount == 2, "phase not re-queried during dispatch")
     Check(Clock.AdvanceGameTime(900.25, Time.Advance.Debug), "fractional tail")
@@ -121,13 +126,14 @@ function PrintResult() {
     else PrintString("F00 FAIL: see individual checks")
 }
 ```
-Each impure call executes once (store Boolean local then Check), not as a pretend pure expression. NearlyEqual = Float double precision with explicit tolerance 0.00001; verify actual node. Check latches failure forever for this run; no later PASS overrides failure. PhaseReadCount increment is probe-only diagnostics, not production behavior. 
+For local variables inside Event Graph use private temporary members (ActiveCount/Probes/Delta) or move non-latent logic into a helper function; function-local variables are only in functions, not Event Graph. bRunProbe is public Instance Editable (other actor reads it). Each impure call executes once (store Boolean local then Check), not as a pretend pure expression. NearlyEqual = Float double precision with explicit tolerance 0.00001; verify actual node. Check latches failure forever for this run; no later PASS overrides failure. PhaseReadCount increment is probe-only diagnostics, not production behavior. 
 ## Runs / evidence
 1. Fresh PIE bRunProbe=true, bSingleCall=true; repeated fresh PIE false; both final hour after initial phase +3600, four callbacks before tail. 
 2. Fresh PIE bRestoreFirst=true; 43200 preserved, new game rejected, then +3600; no load replay.
 3. Temporary second clock placed in test map; bExpectDuplicateClock=true: both reject init/restore/advance; remove duplicate after test.
 4. Manual separate phase-order fixture using temporary additional test receivers implementing same BPI (or duplicate probe actors with bRunProbe=false and manually register by a temporary test graph, set phases via debugger before registration): register Body then Climate, advance one step, record actual callbacks in order Climate→Body, inspect cache unchanged. This is explicitly NOT covered by single receiver automated check; actual fixture/PIE evidence required before claiming phase order. Test invalidated reference pruning similarly with destroyed temporary receiver between advances. External accessor inspection: cannot Set WorldTimeSeconds on another actor. 
-5. Normal PIE bRunProbe=false: Level Blueprint initializes exactly once, no test advances. Remove probe before release or leave disabled in test map only. 
+5. Temporary second active probe: both must print FAIL and neither initialize clock. Remove extra active probe.
+6. Normal PIE bRunProbe=false: Level Blueprint initializes exactly once, no test advances. Remove probe before release or leave disabled in test map only. 
 - [Epic LWC, served as UE 5.8](https://dev.epicgames.com/documentation/tr-tr/unreal-engine/large-world-coordinates-in-unreal-engine-5): Blueprint Float has single/double precision subtypes.
 - [Epic Blueprint Variables, served as 5.9](https://dev.epicgames.com/documentation/en-us/unreal-engine/blueprint-variables-in-unreal-engine): Float type and Private property; exact 5.8.4 editor labels and MCP pin encoding still require local inspection.
 - [Epic UE 5.8 Enum authoring](https://dev.epicgames.com/documentation/unreal-engine/designer-02-create-a-key-in-unreal-engine).
