@@ -48,20 +48,25 @@ WAIT_MINUTES=90
 def weather_for(world, condition: str, seed: int, *, heldout=False) -> DayWeather:
     """Observable present weather; unseen storm duration/arrival can vary.
 
-    Training uses a controlled 120-min storm (inside the model's usual range).
+    Training storms vary from 60–120 minutes by seed (usual model range).
     Heldout calm sometimes turns stormy AFTER departure and present storm
     sometimes ends earlier; the agent sees only wind at its current position.
+    Same weather and seed always apply to all policies in one paired case.
     """
     if condition not in ("calm","storm"):
         raise ValueError("unknown weather condition")
     dawn=world.dawn_min
     if not heldout:
-        return (DayWeather(dawn,dawn+120,None) if condition=="storm"
-                else DayWeather(None,None,None))
+        if condition=="storm":
+            start=dawn-(seed*7)%30
+            return DayWeather(start,start+60+(seed*11)%61,None)
+        return DayWeather(None,None,None)
     if condition=="calm":
-        return (DayWeather(dawn+90,dawn+180,None) if seed%3==0
-                else DayWeather(None,None,None))
-    return DayWeather(dawn,dawn+(60 if seed%3==0 else 120),None)
+        start=dawn+60+(seed*7)%120
+        return (DayWeather(start,start+60+(seed*13)%61,None)
+                if seed%3==0 else DayWeather(None,None,None))
+    start=dawn-(seed*7)%30
+    return DayWeather(start,start+60+(seed*17)%61,None)
 
 
 def observed_legs_cue(world, weather: DayWeather, trip: dict) -> str:
@@ -344,7 +349,27 @@ def study(seeds: int=12)->dict:
                             if mode=="causal_wait" and d["choice"]==WAIT:
                                 p["informed_wait"]+=1
                         if decisions["contextual"]["choice"]!=decisions["last_error"]["choice"]:
+                            before=outcomes["last_error"]
+                            after=outcomes["contextual"]
                             counts["context_vs_last_choice_changes"]+=1
+                            if after["choice"]==EXPLORE:
+                                counts["context_deescalated_to_explore"]+=1
+                            if after["choice"]==DRY:
+                                counts["context_escalated_to_dry"]+=1
+                            if after["return"] and not before["return"]:
+                                counts["context_rescued_return"]+=1
+                            if before["return"] and not after["return"]:
+                                counts["context_lost_return"]+=1
+                            if after["work"] and not before["work"]:
+                                counts["context_unlocked_work"]+=1
+                            if before["work"] and not after["work"]:
+                                counts["context_lost_work"]+=1
+                            counts["context_vs_naive_fuel_delta_milli"]+=round(
+                                1000*(after["fuel"]-before["fuel"])
+                            )
+                            counts["context_vs_naive_time_delta_milli"]+=round(
+                                1000*(after["time_min"]-before["time_min"])
+                            )
                             pattern_counts[pattern]["context_vs_last_changes"]+=1
                             if len(switched)<24:
                                 switched.append({
@@ -363,9 +388,14 @@ def study(seeds: int=12)->dict:
                             y=outcomes[mode]
                             if y["fuel"] < -1e-5 or y["time_min"] < 0 or y["time_min"] > 1440:
                                 checks["physical_bounds"]+=1
-                        if x["heldout"]["condition_at_departure"] != (
-                                "storm" if x["heldout"]["researcher_weather_schedule"][
-                                    "storm_start"]==480 else "calm"):
+                        forecast_wind=weather_for(
+                            make_world(variant,distance),
+                            x["heldout"]["condition_at_departure"],
+                            x["heldout"]["seed"],heldout=True
+                        )
+                        if ("storm" if forecast_wind.is_storm(
+                                make_world(variant,distance).dawn_min
+                             ) else "calm")!=x["heldout"]["condition_at_departure"]:
                             checks["cue_leaks_future"]+=1
     def mean_per_trial(c,key,scale=1.0):
         return round(c[key]/(max(1,c["trials"])*scale),4)
@@ -376,7 +406,10 @@ def study(seeds: int=12)->dict:
                   "training_per_case":3,"human_participants":0,
                   "training_is_researcher_assigned":True,
                   "same_start_each_training":True,
-                  "no_future_weather_in_decision":True},
+                  "no_future_weather_in_decision":True,
+                  "structurally_distinct_route_profile_pattern_combinations":
+                      len(PATTERNS)*len(VARIANTS)*len(PROFILES)*len(DISTANCES),
+                  "seed_variation":"storm start/duration varies, calm training remains deterministic"},
         "counts":dict(counts),
         "policy_outcomes":{
             name:{"trials":c["trials"],"dry":c["dry"],"wait":c["wait"],
@@ -397,7 +430,8 @@ def study(seeds: int=12)->dict:
         "limits":[
             "Training deliberately repeats the same edge with reset bodies; this is NOT 3 survived days.",
             "Wind at each leg start is an observable proxy; within-leg changes are not sampled in the current world stepper.",
-            "The weather sequences are experimenter-controlled; storm lasts 120min, valid model duration but not random probability.",
+            "The weather sequences are experimenter-controlled; storms last 60–120min with seed-varying start, not real random occurrence probabilities.",
+            "The calm-only training cases are deterministic repetitions across seeds; case counts are NOT statistical independent player trials.",
             "Attribution is an evidence label, NOT certainty about what caused a loss. No dry counterfactual observed by agent.",
             "The contextual learner leaves storm losses out of its calm global core estimate; this is an explicit tested architectural assumption.",
             "Wait action is available only to an agent believing storms pass; its outcome uses actual time, fuel and room cooling.",
