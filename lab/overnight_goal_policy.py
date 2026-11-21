@@ -41,9 +41,18 @@ def pressure(body: Body, room: Room, world: World, *,
         return {"goal":PROTECT,
                 "reason":"observed core/stamina/fatigue threatens next action",
                 "cues":cues}
-    if pending_work and deadline_minute-body.elapsed_minutes<=WORK_MINUTES+90:
+    deadline_left=deadline_minute-body.elapsed_minutes
+    if pending_work and deadline_left<WORK_MINUTES:
+        if room.fuel < world.fuel_per_night:
+            return {"goal":FUEL,
+                    "reason":"task deadline now unattainable; observed fuel is low",
+                    "cues":cues}
+        return {"goal":PROTECT,
+                "reason":"task deadline now unattainable; preserve body for later",
+                "cues":cues}
+    if pending_work and deadline_left<=WORK_MINUTES+90:
         return {"goal":WORK,
-                "reason":"visible outstanding task and deadline approaching",
+                "reason":"visible pending task can still finish before deadline",
                 "cues":cues}
     if room.fuel < world.fuel_per_night:
         return {"goal":FUEL,
