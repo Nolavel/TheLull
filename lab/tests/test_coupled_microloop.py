@@ -1,14 +1,86 @@
-"""Conservation contracts for a single real physical clock and 2x2 coupling."""
+"""Conservation and actual clothing benefit contracts for 2x2 coupling."""
+import random
 import unittest
 
 from lab.body import Body, CLOTHING_INSULATION_C
-from lab.coupled_microloop import (CONDITIONS, POLICIES, DRY, WATER,
-                                   Equipment, run)
+from lab.coupled_microloop import (
+    CONDITIONS, POLICIES, DRY, WATER, Equipment, _advance, run
+)
 from lab.coupled_mechanics_study import study
 from lab.evening import Room, step_body
+from lab.world import World
 
 
 class CoupledGreyboxContract(unittest.TestCase):
+    def test_three_clothing_advantages_on_identical_route(self):
+        world = World.load("district_v0", "B_readable")
+        weather = world.roll_weather(random.Random("7:weather:1"))
+        edge = world.edge("home", "house_a")
+        clock = world.dawn_min
+        wind = weather.wind(clock)
+        baseline_mins = world.travel_minutes(edge, clock, weather)
+        observed = {}
+
+        for wet in (0.0, 0.5, 1.0):
+            gear = Equipment(wetness=wet)
+            body = Body()
+            room = Room(fuel=0)
+            costs = {"stamina_demand":0.0,"extra_fatigue":0.0,"walked_h":0.0,
+                     "minimum_stamina":body.stamina,"wet_pace_delay_min":0.0}
+            target_minutes = gear.travel_minutes(
+                baseline_mins, wind=wind, exposure=edge.exposure
+            )
+            billed = _advance(
+                body, room, world, gear, target_minutes, at_home=False,
+                weather=weather, exposure=edge.exposure,
+                travelling=True, walking_costs=costs
+            )
+            self.assertAlmostEqual(billed, target_minutes, places=4)
+            self.assertFalse(body.terminal)
+            observed[wet] = (body.core_c, body.stamina, body.fatigue,
+                             billed, gear.movement_stability(
+                                 wind=wind, exposure=edge.exposure
+                             ), costs["stamina_demand"])
+        dry, half, wet = [observed[x] for x in (0, 0.5, 1)]
+        self.assertGreater(dry[0],half[0])
+        self.assertGreater(half[0],wet[0])
+        self.assertGreater(dry[1],half[1])
+        self.assertGreater(half[1],wet[1])
+        self.assertLess(dry[2],half[2])
+        self.assertLess(half[2],wet[2])
+        self.assertLess(dry[3],half[3])
+        self.assertLess(half[3],wet[3])
+        self.assertGreater(dry[4],half[4])
+        self.assertGreater(half[4],wet[4])
+        self.assertLess(dry[5],half[5])
+        self.assertLess(half[5],wet[5])
+        self.assertLess(wet[3] / dry[3], 1.06)  # SMALL movement modifier
+        self.assertAlmostEqual(dry[4],1.0)
+
+    def test_drying_restores_all_three_benefits_without_a_buff(self):
+        world = World.load("district_v0", "A_safe")
+        gear = Equipment(wetness=1.0)
+        body = Body()
+        room = Room(fuel=2, fire_lit=True)
+        self.assertGreater(gear.walk_stamina_per_h, Equipment().walk_stamina_per_h)
+        _advance(body,room,world,gear,90,at_home=True,work=DRY)
+        self.assertAlmostEqual(gear.wetness,0.0)
+        self.assertAlmostEqual(gear.clothing_c,Equipment().clothing_c)
+        self.assertAlmostEqual(gear.walk_stamina_per_h,Equipment().walk_stamina_per_h)
+        self.assertAlmostEqual(
+            gear.movement_stability(wind=1,exposure=1),1.0
+        )
+        self.assertAlmostEqual(room.burned_fuel_total,1.5,places=4)
+        self.assertGreater(room.fuel,0)  # finite fuel left, no creation
+
+    def test_no_fuel_means_no_automatic_clothing_repair(self):
+        world = World.load("district_v0", "A_safe")
+        body, room, gear = Body(), Room(fuel=0), Equipment(wetness=1.0)
+        _advance(body,room,world,gear,30,at_home=True,work=DRY)
+        self.assertEqual(gear.wetness,1.0)
+        self.assertEqual(room.burned_fuel_total,0.0)
+        self.assertLess(gear.movement_stability(),1.0)
+
     def test_dry_default_is_unchanged_and_wet_body_loses_more_heat(self):
         a=Body()
         b=Body()
