@@ -8,6 +8,15 @@
 ## Unreleased
 
 
+### Research (D2.0: the lost opportunity changes tomorrow's actual purpose, 21.11.2026)
+
+- `lab/lost_opportunity_study.py`: 288 **different constructed dusk states** with actual `evening_run.play` night, followed by a *paired identical physical* morning in two policies — `opportunity` and `continue_job`. Action advances real `Body/Room/World/Equipment` time, then second physical night. This isolates causal opportunities; it is NOT the full prior day's outdoor trip.
+- Concrete scheduled 60-minute job readiness (stamina≥60, core≥36°C, fatigue≤70, before 11:00); real alternatives paid by time/stamina/resources: rest-and-retry, seal shelter (persistent cooling reduction), pack (persistent 15-minute next trip setup advantage), chop finite furniture (+4 fuel). A time-only, same-clock control separates job loss through overnight physical changes from simple time/deadline progression.
+- [CI #44869375650](https://github.com/Nolavel/TheLull/actions/runs/44869375650): 288 evening conditions; **200 genuine first dawns** (88 didn't reach); **29 overnight-lost work opportunities** and **60 regained work opportunities**. Only **10/29** losses led to an actually different *paid morning action* — **8 chop, 2 seal**, no pack choices. On lost subset **6 vs 0** additional second dawns at cost of **0 vs 2** jobs completed. Across all 200: **60 vs 36** second dawns, **82 vs 90** jobs (adapted vs honest restore-and-retry control): concrete tradeoff, not universal win.
+- [Detailed D2.0 report](docs/gameplay/reference/DAY_PURPOSE_AFTER_NIGHT_D20.md); 8 targeted tests PASS, all accounting checks 0; **218 complete lab tests, 18/18 CI workflows green** on code revision `c3084cfb`. No participants, no subjective fun or independently generated goals; `production` untouched.
+
+
+
 ### Research (D1.9: overnight goal continuity, 21.11.2026)
 
 - Опциональный `goal_policy=adaptive|frozen` в **каноническом** `survival_loop.run`, через реальный день, выход за запасами, вечернее решение, ночь с печью и следующий физически наступивший рассвет. **Один Body, Room, Agent/Beliefs и конечный World на весь прогон;** Equipment сохраняется сухим, не притворяемся, будто day controller уже умеет wetness.
