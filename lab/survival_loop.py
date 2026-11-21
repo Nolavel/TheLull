@@ -243,14 +243,15 @@ def run(seed: int, days: int = 3, *, variant: str = "B_readable",
                 )
                 if heating_policy == "agent":
                     decide_stove("вечер перед работой", 1.5)
+                night_args = {"hours_of_night": actual_night_h}
+                if heating_policy == "agent":
+                    night_args["automatic_ignition"] = False
+                    night_args["on_fire_opportunity"] = (
+                        lambda point, hours: decide_stove(point, min(hours, 2.0))
+                    )
                 night = play(
                     proposed["option"], world.air_temp_c, room, body,
-                    agent.beliefs, hours_of_night=actual_night_h,
-                    automatic_ignition=heating_policy != "agent",
-                    on_fire_opportunity=(
-                        (lambda point, hours: decide_stove(point, min(hours, 2.0)))
-                        if heating_policy == "agent" else None
-                    ),
+                    agent.beliefs, **night_args
                 )
                 if not body.terminal:
                     if night["observed_burn_rate"] is not None:
