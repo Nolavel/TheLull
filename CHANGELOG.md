@@ -7,7 +7,6 @@
 
 ## Unreleased
 
-<<<<<<< HEAD
 ### Changed (непрерывность: единые часы, тело, память и конец прогона)
 
 - `lab/body.py` (новый, владелец Claude): единое тело и единственная точка изменения температуры тела
@@ -23,7 +22,7 @@
 - `DEPART_MIN` оставлен устаревшим псевдонимом, чтобы не сломать `loop_bridge.py` Codex до его переноса.
 
 — Claude, `ue-claudeflow`
-=======
+
 ### Decision (production: манифест, шаблон Third Person, квартал Key West, 21.11.2026)
 
 - Публикуем **только документацию**: [манифест](docs/gameplay/SURVIVAL_MANIFEST.md), [зеркальный UE-проект](docs/blueprints/project/README.md), атомарную сборку Claude Code через Unreal MCP и backlog. Python lab, CI и остальные изменения Codex в production не переносим этим коммитом.
@@ -39,7 +38,6 @@
 
 — ChatGPT, `production` (20.11.2026)
 
->>>>>>> origin/production
 
 ### Added (сквозной аудит gameplay loop и референса The Long Dark)
 
