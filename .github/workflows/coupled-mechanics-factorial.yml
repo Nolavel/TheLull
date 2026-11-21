@@ -1,0 +1,59 @@
+name: coupled-mechanics-factorial
+
+on:
+  push:
+    branches: [ue-codex]
+    paths:
+      - "lab/**"
+      - ".github/workflows/coupled-mechanics-factorial.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  finite-heat-decision:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Shared Body/Room and factorial resource contracts
+        run: python3 -m unittest lab.tests.test_coupled_microloop -v
+      - name: Fixed-weather 2x2 across three worlds and four decision policies
+        run: |
+          mkdir -p research-results
+          python3 -m lab.coupled_mechanics_study --seeds 30 --json research-results/coupled.json | tee research-results/summary.json
+          python3 - <<'PY' | tee -a "$GITHUB_STEP_SUMMARY"
+          import json
+          d=json.load(open("research-results/coupled.json",encoding="utf-8"))
+          print("## Coupled survival mechanics — 2×2 wet clothes / water preparation")
+          print(f"Matched blocks: {d['design']['blocks']}; simulated runs: {d['design']['runs']}. No human fun data.")
+          print("| World | Wet | Water needed | Policy | Capped elapsed h | Prepared water | Wet at dusk | Fuel burned | Choices |")
+          print("|---|---:|---:|---|---:|---:|---:|---:|---|")
+          for world,groups in d["groups"].items():
+              for group,policies in groups.items():
+                  for policy in ("agent","explore_first","dry_first","water_first"):
+                      r=policies[policy]
+                      parts=dict(x.split("=") for x in group.split("/"))
+                      print(f"| {world} | {parts['wet']} | {parts['water']} | {policy} | "
+                            f"{r['mean_elapsed_h']} | {r['water_prepared']} | "
+                            f"{r['mean_wetness_at_dusk']} | {r['mean_fuel_burned']} | "
+                            f"{r['choices']} |")
+          print("\\n### Interaction (difference-in-differences; not fun)")
+          print("| World | Policy | Elapsed hours interaction | Fuel interaction | Core at dusk interaction |")
+          print("|---|---|---:|---:|---:|")
+          for world,policies in d["factorial_interactions"].items():
+              for policy,r in policies.items():
+                  print(f"| {world} | {policy} | {r['elapsed_h_did']} | {r['fuel_burned_did']} | {r['core_at_dusk_did']} |")
+          print("\\nMechanical checks:",d["checks"])
+          print("Forced choices observed:",d["observations"]["forced_choice_observations"])
+          print("Two factors change needs, NOT weather, loot or the core survival coefficients.")
+          assert all(x==0 for x in d["checks"].values()),d["checks"]
+          PY
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: coupled-mechanics-factorial-json
+          path: research-results/
