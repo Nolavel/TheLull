@@ -167,6 +167,16 @@ def choose_next(actor: Agent, world, *, cue: str, mode: str) -> dict:
         "predicted_route_time_saving_min":predicted_saved_minutes if possible_wait else None,
         "basis":"сохранить дрова, заплатить временем и холодом комнаты",
     })
+    d["wait_gate"]={
+        "visible_storm":cue=="storm",
+        "storm_finiteness_known":actor.beliefs.knows_storms_pass,
+        "storm_specific_excess_evidence":bool(
+            assessment and assessment["attribution"]=="storm_specific_excess"),
+        "predicted_savings_exceed_wait":bool(
+            possible_wait and predicted_saved_minutes >
+            actor.expected_storm_left(0)*1.1),
+        "predicted_savings_minutes":round(predicted_saved_minutes,5),
+    }
     if (mode=="causal_wait" and possible_wait and assessment is not None
         and assessment["attribution"]=="storm_specific_excess"
         and predicted_saved_minutes > actor.expected_storm_left(0)*1.1):
@@ -252,12 +262,16 @@ def run_case(seed: int,variant: str,profile: str,multiplier: int,
     heldout_seed=seed+10000
     upcoming=weather_for(world,next_cue,heldout_seed,heldout=True)
     heldout=evaluate(heldout_seed,variant,multiplier,weather_override=upcoming)
+    # Evaluate every alternative independently for AUDIT ONLY, after the
+    # policies commit. Agents never read these outcomes or weather schedule.
+    counterfactual={
+        EXPLORE:heldout["arms"]["wet_now"],
+        DRY:heldout["arms"]["prepared_all"],
+        WAIT:wait_and_walk(heldout_seed,variant,multiplier,upcoming),
+    }
     outcomes={}
-    for mode,dec in decisions.items():
-        option=dec["choice"]
-        physical=(wait_and_walk(heldout_seed,variant,multiplier,upcoming)
-                  if option==WAIT else heldout["arms"][
-                      "prepared_all" if option==DRY else "wet_now"])
+    scored_alternatives={}
+    for option,physical in counterfactual.items():
         work=None
         if physical["completed_return"]:
             b,r=restore_outcome(physical,world)
@@ -265,14 +279,16 @@ def run_case(seed: int,variant: str,profile: str,multiplier: int,
                 b,r,world,rest_if_tired=True,
                 gear=Equipment(wetness=physical["wetness_after_preparation"])
             )
-        outcomes[mode]={
-            "choice":option,
+        scored_alternatives[option]={
             "return":physical["completed_return"],
             "work":bool(work and work["completed"]),
             "rest_min":work["rest_minutes"] if work else None,
             "fuel":physical["fuel_burned"],
             "time_min":physical["elapsed_minutes"],
         }
+    for mode,dec in decisions.items():
+        option=dec["choice"]
+        outcomes[mode]={"choice":option,**scored_alternatives[option]}
     return {"case":{"seed":seed,"variant":variant,"profile":profile,
                     "distance":multiplier,"pattern":pattern},
             "history":traces,"next_current_observed_cue":next_cue,
@@ -281,10 +297,7 @@ def run_case(seed: int,variant: str,profile: str,multiplier: int,
                        "researcher_weather_schedule":{
                            "storm_start":upcoming.storm_start,
                            "storm_end":upcoming.storm_end}},
-            "physical_controls":{
-                arm:{"return":heldout["arms"][arm]["completed_return"],
-                     "time_min":heldout["arms"][arm]["elapsed_minutes"]}
-                for arm in ("wet_now","prepared_all")},
+            "researcher_only_all_alternatives":scored_alternatives,
             }
 
 
@@ -322,6 +335,19 @@ def study(seeds: int=12)->dict:
                                     checks["bad_signed_error"]+=1
                         decisions=x["decisions"]
                         outcomes=x["heldout"]["outcomes"]
+                        alternatives=x["researcher_only_all_alternatives"]
+                        wet=alternatives[EXPLORE]
+                        waited=alternatives[WAIT]
+                        if waited["return"] and not wet["return"]:
+                            counts["wait_counterfactual_saved_return"]+=1
+                        if wet["return"] and not waited["return"]:
+                            counts["wait_counterfactual_lost_return"]+=1
+                        if waited["work"] and not wet["work"]:
+                            counts["wait_counterfactual_unlocked_work"]+=1
+                        gate=decisions["causal_wait"]["wait_gate"]
+                        for key,value in gate.items():
+                            if key != "predicted_savings_minutes" and value:
+                                counts["wait_gate:"+key]+=1
                         if any(len(d["alternatives"])!=3 for d in decisions.values()):
                             checks["missing_action"]+=1
                         if any(d["choice"] not in [
@@ -339,6 +365,31 @@ def study(seeds: int=12)->dict:
                             if d["choice"]==WAIT:c["wait"]+=1
                             if outcomes[mode]["return"]:c["return"]+=1
                             if outcomes[mode]["work"]:c["work"]+=1
+                            chosen=outcomes[mode]
+                            # Pareto audit: actual task/return, scarce fuel and
+                            # time. Never use this to alter a choice retroactively.
+                            dominated=any(
+                                (alt["return"]>=chosen["return"]
+                                 and alt["work"]>=chosen["work"]
+                                 and alt["fuel"]<=chosen["fuel"]+1e-6
+                                 and alt["time_min"]<=chosen["time_min"]+1e-6
+                                 and (alt["return"]>chosen["return"]
+                                      or alt["work"]>chosen["work"]
+                                      or alt["fuel"]<chosen["fuel"]-1e-6
+                                      or alt["time_min"]<chosen["time_min"]-1e-6))
+                                for option,alt in alternatives.items()
+                                if option!=d["choice"] and any(
+                                    z["option"]==option and z["available"]
+                                    for z in d["alternatives"])
+                            )
+                            if dominated:
+                                c["pareto_dominated"]+=1
+                            if not chosen["return"] and any(
+                                alt["return"] for option,alt in alternatives.items()
+                                if option!=d["choice"] and any(
+                                    z["option"]==option and z["available"]
+                                    for z in d["alternatives"])):
+                                c["return_possible_elsewhere"]+=1
                             c["fuel_milli"]+=round(outcomes[mode]["fuel"]*1000)
                             c["time_milli"]+=round(outcomes[mode]["time_min"]*1000)
                             p=pattern_counts[pattern]
@@ -414,6 +465,8 @@ def study(seeds: int=12)->dict:
         "policy_outcomes":{
             name:{"trials":c["trials"],"dry":c["dry"],"wait":c["wait"],
                   "returns":c["return"],"work_completed":c["work"],
+                  "pareto_dominated":c["pareto_dominated"],
+                  "return_possible_elsewhere":c["return_possible_elsewhere"],
                   "mean_fuel":mean_per_trial(c,"fuel_milli",1000),
                   "mean_route_plus_preparation_h":mean_per_trial(
                       c,"time_milli",60000)}
@@ -436,6 +489,8 @@ def study(seeds: int=12)->dict:
             "The contextual learner leaves storm losses out of its calm global core estimate; this is an explicit tested architectural assumption.",
             "Wait action is available only to an agent believing storms pass; its outcome uses actual time, fuel and room cooling.",
             "The heldout future storm end/start is hidden from the choice, even though current wind is visible.",
+            "The posthoc Pareto diagnostic is researcher-only and cannot provide an actor with future knowledge.",
+            "Wait was introduced as a real alternative; zero selected waits is an admissible negative result.",
             "No humans, no claim to fun or fully emergent autonomous general-purpose intent.",
         ]
     }
