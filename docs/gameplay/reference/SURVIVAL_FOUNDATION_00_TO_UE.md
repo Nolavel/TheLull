@@ -148,3 +148,6 @@ PLAYER presses Interact on selected shelter window
 
 
 **F00 revision 21.11.2026:** canonical contracts in [mirror](../../blueprints/project/README.md) supersede earlier examples above (explicit init/restore, E_SimPhase cache, only Start/End in Step, Float double precision). Cloud re-review pending.
+
+
+**F00 interface update, 21.11.2026:** historical API sketches above are not build contracts. The active BP_SurvivalWorld.AdvanceGameTime returns E_AdvanceResult, not bool; BPI.SimulateStep returns bApplied:Boolean (interface function); RestoreWorldTime only allowed before initialisation. Current ST_CoreVitals is normalized Warmth/Rest/Hydration/Hunger/Condition; do not build preliminary CoreTemperatureC/Calories proposals as separate authoritative state. See project/DEPENDENCY_AUDIT.md.

@@ -5,7 +5,7 @@ AssetType: Blueprint Structure (User Defined Struct)
 Mirror: `docs/blueprints/project/Content/Survival/Time/ST_SimStep.md` → `<ProjectRoot>/Content/Survival/Time/ST_SimStep.uasset`.
 **Статус: revised draft, 21.11.2026; NEEDS RE-REVIEW.** Не создан в UE. Точный тип/пин и операции MCP подтвердить локально в UE 5.8.4; [backlog](../../../BACKLOG.md). Ревью [Claude Cloud #3](https://github.com/Nolavel/TheLull/issues/3#issuecomment-7059415969).
 
-DependsOn: Gameplay Tags settings
+DependsOn: Config/DefaultGameplayTags.ini. Consumers: BPI_SimStepReceiver, BP_SurvivalWorld, BPC_SurvivalBody, BP_F00ClockProbe.
 OwnedBy: BP_SurvivalWorld — единственный создатель авторитетного интервала.
 
 ## Создание и fields

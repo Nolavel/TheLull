@@ -1,7 +1,7 @@
 # DefaultGameplayTags.ini — конфигурация тегов F00
 
 **Mirror:** `docs/blueprints/project/Config/DefaultGameplayTags.ini.md` → **real target:** `<ProjectRoot>/Config/DefaultGameplayTags.ini`.
-**Тип:** один проектный конфигурационный файл, **не** Blueprint. **Статус:** planned; существующее содержимое локального ini не исследовано.
+**Тип:** один проектный конфигурационный файл, **не** Blueprint. **Статус:** NEEDS REVIEW; существующее содержимое локального ini не исследовано.
 
 ## Перед изменением
 Claude Code через текущий Unreal MCP/доступ к файлам должен сначала **прочитать имеющийся** `Config/DefaultGameplayTags.ini` и проверить Project Settings → Gameplay Tags → Import Tags From Config. Нельзя заменять чужой файл целиком или удалять имеющиеся tags.

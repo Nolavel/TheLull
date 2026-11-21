@@ -2,7 +2,7 @@
 
 Package: /Game/UI/Survival/WBP_VitalsHUD
 AssetType: Widget Blueprint
-DependsOn: ST_CoreVitals
+DependsOn: ST_CoreVitals (custom); UMG ProgressBar/TextBlock (engine native). Consumer: L_SurvivalCore.
 Status: stencil drafted / NEEDS REVIEW, 21.11.2026. Actual UE 5.8.4 pins/MCP/PIE not verified. [Research](../../../../../gameplay/reference/CORE_BODY_UI_TO_UE.md).
 
 ParentClass: UserWidget

@@ -7,6 +7,12 @@
 
 ## Unreleased
 
+### Changed (production: cross-asset self-audit and F00 contracts, 21.11.2026)
+
+- Авторская задача: до независимого ревью самостоятельно перепроверены все 14 активных targets UE-mirror (12 Content, 2 Config) и отложенный Key West. Добавлены dependency matrix и Config/DefaultEngine.ini, E_AdvanceResult; согласованы BPI receiver bApplied, Clock Completed/Rejected/PartialFailure, Body, F00 probe, Level startup, UMG contracts и диагностические guards. Исправлены неверные имена полей в ST_CoreVitals и оставшийся bool-vs-enum вызов Probe.
+- Все файлы **SELF-REVIEWED DRAFT / NEEDS CLOUD REVIEW**; никакой .uasset, MCP/Compile/PIE не проверен. Результат PartialFailure не гарантирует rollback, поэтому clock останавливает session. Restore после init запрещён, coordinator load не создан. Нет реального баланса, heat/food/inventory, или географии; только документация, без переносов lab/CI и чужих веток. Codex / production.
+
+
 ### Decision / Added (production: Core before geography; drafts before review, 21.11.2026)
 
 - Автор изменил приоритет: TLD survival core → minimal HUD → Debug UI → связанные действия/ресурсы → география. Трафареты можно публиковать в production до Cloud review, явно NEEDS REVIEW / NEEDS RE-REVIEW; это не статус готовности к сборке. F00 размещён на L_SurvivalCore; граф часов не изменён. Старый план квартала DEFERRED.

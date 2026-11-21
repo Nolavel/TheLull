@@ -17,7 +17,8 @@ UE 5.8.4 → Games → Third Person → Blueprint → Variant None. [Epic docs �
 ```text
 project/
 ├── Config/
-│   └── DefaultGameplayTags.ini.md
+│   ├── DefaultGameplayTags.ini.md
+│   └── DefaultEngine.ini.md
 └── Content/
     ├── Maps/
     │   ├── L_SurvivalCore.md
@@ -30,6 +31,7 @@ project/
     │   │   └── BPC_SurvivalBody.md
     │   └── Time/
     │       ├── E_SimPhase.md
+    │       ├── E_AdvanceResult.md
     │       ├── ST_SimStep.md
     │       ├── BPI_SimStepReceiver.md
     │       └── BP_SurvivalWorld.md
@@ -50,13 +52,15 @@ project/
 **Уточнение автора 21.11.2026 (заменяет прежний порядок):** сначала ядро survival по The Long Dark, затем минимальный UI и Debug UI с рабочими индикаторами; география только после этого. Штатная Third Person площадка нужна для запуска, не реконструкция квартала. Key West не отменён, но не является зависимостью core. Первичные F01/F02 используют контролируемый температурный вход, полная климатическая модель позднее.
 До локального запуска: предметный core, HUD, Debug. Географию не начинать.
 
+[Dependency audit](DEPENDENCY_AUDIT.md) — read before Cloud review. Config/DefaultEngine.ini is modified only after the real L_SurvivalCore map exists.
+
 ## Порядок
 
 **Разрешение автора 21.11.2026:** Codex может целевыми коммитами публиковать подготовленные survival MD-трафареты и их документы в `production` ДО независимого ревью, с явным статусом `NEEDS REVIEW` / `NEEDS RE-REVIEW` и указанием snapshot/зависимостей. Это не разрешение на произвольный merge ветки, перенос lab/CI или изменение чужой ветки. Local не считает такие MD готовыми к сборке до Cloud review и проверки реального MCP.
 
 1. **F−1**: Claude Local настраивает MCP, создаёт Third Person Blueprint project (Variant None), подтверждает .uproject / установленный UE 5.8.4 / template / реально доступные MCP operations. Перед сборкой — результат предварительного ревью Cloud по SHA трафарета.
 2. **F−1**: [L_SurvivalCore](Content/Maps/L_SurvivalCore.md), копия штатного уровня, не район.
-3. **F00**: [Config](Config/DefaultGameplayTags.ini.md) → [E_SimPhase](Content/Survival/Time/E_SimPhase.md) + [ST_SimStep](Content/Survival/Time/ST_SimStep.md) → [BPI_SimStepReceiver](Content/Survival/Time/BPI_SimStepReceiver.md) → [BP_SurvivalWorld](Content/Survival/Time/BP_SurvivalWorld.md) → [BP_F00ClockProbe](Content/Tests/Survival/BP_F00ClockProbe.md). Подключаем к L_SurvivalCore; probe opt-in.
+3. **F00**: [Config](Config/DefaultGameplayTags.ini.md) → [E_SimPhase](Content/Survival/Time/E_SimPhase.md) + [E_AdvanceResult](Content/Survival/Time/E_AdvanceResult.md) + [ST_SimStep](Content/Survival/Time/ST_SimStep.md) → [BPI_SimStepReceiver](Content/Survival/Time/BPI_SimStepReceiver.md) → [BP_SurvivalWorld](Content/Survival/Time/BP_SurvivalWorld.md) → [BP_F00ClockProbe](Content/Tests/Survival/BP_F00ClockProbe.md). Подключаем к L_SurvivalCore; probe opt-in.
 4. После каждого asset Claude Local через MCP: build → Compile/Save → inspect → PIE → actual vs stencil → [BACKLOG](BACKLOG.md) → handoff Codex. Дальше [BP_CoreExposureZone](Content/Survival/Environment/BP_CoreExposureZone.md) + [ST_CoreVitals](Content/Survival/Body/ST_CoreVitals.md) → [BPC_SurvivalBody](Content/Survival/Body/BPC_SurvivalBody.md) → [HUD](Content/UI/Survival/WBP_VitalsHUD.md) → [Debug](Content/UI/Survival/WBP_SurvivalDebug.md). География после рабочего ядра.
 
 Официальная документация [UE 5.8](https://dev.epicgames.com/documentation/en-us/unreal-engine?application_version=5.8) и [Blueprint API](https://dev.epicgames.com/documentation/en-us/unreal-engine/BlueprintAPI?application_version=5.8): проверить версию в селекторе, пины и возможности в установленной 5.8.4. **Ни один из наших ассетов ещё не создан и PIE не проверялся.** F00 revised after Cloud #3; re-review pending. Новый уровень размещения, core и UI — NEEDS REVIEW; F00 graph не менялся.

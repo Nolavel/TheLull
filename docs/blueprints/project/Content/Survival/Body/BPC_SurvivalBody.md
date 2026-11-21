@@ -2,7 +2,7 @@
 
 Package: /Game/Survival/Body/BPC_SurvivalBody
 AssetType: Blueprint Class
-DependsOn: ST_CoreVitals, ST_SimStep, BPI_SimStepReceiver, E_SimPhase, BP_SurvivalWorld, BP_CoreExposureZone
+DependsOn: ST_CoreVitals, ST_SimStep, BPI_SimStepReceiver, E_SimPhase, BP_SurvivalWorld, BP_CoreExposureZone; these are all custom asset stencils (see DEPENDENCY_AUDIT.md).
 Status: stencil drafted / NEEDS REVIEW, 21.11.2026. Actual UE 5.8.4 pins/MCP/PIE not verified. [Research](../../../../../gameplay/reference/CORE_BODY_UI_TO_UE.md).
 
 ParentClass: ActorComponent
@@ -18,15 +18,16 @@ GetSimPhase() -> Phase:E_SimPhase
 SetFixtureExposure(FeelsLikeC: Float(double precision)) -> bOK:Boolean
 ClearFixtureExposureOverride() -> bOK:Boolean
 ApplyFixtureReplenish(RestAdd01, HydrationAdd01, HungerAdd01: Float(double precision)) -> bOK:Boolean
-SimulateStep(Step:ST_SimStep) -> no output
+SimulateStep(Step:ST_SimStep) -> bApplied:Boolean
 OnVitalsChanged(Snapshot:ST_CoreVitals) // Event Dispatcher
 ```
-InitializeFixture: reject if initialized, invalid clock, zone or !IsClockReady; Set Clock + ExposureZone, RegisterParticipant(Self); on false clear references and return false; set initialized true, query initial exposure via ResolveExposure, update FeelsLikeC/ExposureSource, broadcast Vitals, return true. Spawn outside Box for fresh regression. Phase function always Body. GetVitals returns copy. Inputs accepted only after init, test map calls only while clock idle/manual. Exposure bounds -50..50; additions each 0..1; reject out-of-bounds/nonfinite (positive range comparisons). Set Members in copy then Set Vitals once. For SetFixtureExposure set bOverrideExposure=true and OverrideFeelsLikeC from input, update FeelsLikeC/ExposureSource via ResolveExposure, deltas/hours zero; LastCause="Fixture exposure override". ClearFixtureExposureOverride sets false, refreshes from zone, zeros deltas/hours, broadcasts once; no time/needs change. In manual mode outside these commands the location input is sampled on next clock step, not continuously. Replenish independently Clamp(old+add,0,1); report actual deltas, zero other deltas/hours; LastCause="Fixture replenish". No time write, no health refill. Publish once per accepted operation. Test-only API; not final food/drink/sleep actions.
+InitializeFixture: reject if initialized, invalid clock, zone or !IsClockReady; Set Clock + ExposureZone, RegisterParticipant(Self); on false clear references and return false; set initialized true, query initial exposure via ResolveExposure, update FeelsLikeC/ExposureSource, broadcast Vitals, return true. Spawn outside Box for fresh regression. Phase function always Body. GetVitals returns copy. Inputs accepted only after init, if Clock.IsSimulationFaulted=false, Clock.IsTimeDispatching=false and Clock.IsClockReady=true; test map calls only while clock idle/manual. Every public fixture writer validates these preconditions BEFORE touching any field. Exposure bounds -50..50; additions each 0..1; reject out-of-bounds/nonfinite (positive range comparisons). Set Members in copy then Set Vitals once. For SetFixtureExposure set bOverrideExposure=true and OverrideFeelsLikeC from input, update FeelsLikeC/ExposureSource via ResolveExposure, deltas/hours zero; LastCause="Fixture exposure override". ClearFixtureExposureOverride sets false, refreshes from zone, zeros deltas/hours, broadcasts once; no time/needs change. In manual mode outside these commands the location input is sampled on next clock step, not continuously. Replenish independently Clamp(old+add,0,1); report actual deltas, zero other deltas/hours; LastCause="Fixture replenish". No time write, no health refill. Publish once per accepted operation. Test-only API; not final food/drink/sleep actions.
  
 ## Event graph
 ```text
-event SimulateStep(Step) {
-    if (bInitialized) ApplyStep(Step)
+function SimulateStep(Step) -> bApplied:Boolean {
+    if (NOT bInitialized) return false
+    return ApplyStep(Step)
 }
 event EndPlay(EndPlayReason) {
     if (IsValid(Clock)) Clock.UnregisterParticipant(Self)
@@ -35,11 +36,12 @@ event EndPlay(EndPlayReason) {
 ## Function graphs
 Synthetic test coefficients, not medical or TLD balance: all rates game points/hour.
 ```text
-function ApplyStep(Step) {
+function ApplyStep(Step) -> bApplied:Boolean {
     let H = (Step.EndSeconds - Step.StartSeconds)/3600.0
-    if (NOT (H > 0 && H <= 0.25)) { PrintString("invalid body step"); return }
+    if (NOT (H > 0 && H <= 0.25)) { PrintString("invalid body step"); return false }
     let Old = Vitals
     let Exposure, Source = ResolveExposure()
+    if (Source == "Invalid zone fallback") { PrintString("Core FATAL: zone input invalid"); return false }
     let RW = Clamp(Exposure*0.04,-1,1)
     let W = Clamp(Old.Warmth01+RW*H,0,1)
     let R = Clamp(Old.Rest01-0.06*H,0,1)
@@ -57,6 +59,7 @@ function ApplyStep(Step) {
       HungerDelta=F-Old.Hunger01,ConditionDelta=C-Old.Condition01,
       LastStepHours=H,LastCause="Clock step")
     Broadcast OnVitalsChanged(Vitals)
+    return true
 }
 function ResolveExposure() -> FeelsLikeC, Source {
     if (bOverrideExposure) return (OverrideFeelsLikeC,"DEBUG override")
@@ -72,6 +75,6 @@ function EmptyHours(Start01, SignedRatePerHour, Hours) -> Value {
     return 0
 }
 ```
-ApplyStep private impure; ResolveExposure and EmptyHours private pure; all numeric locals/inputs double precision. Actual pin names and interface event implementation verify. No passive health recovery until later rest contract. Future climate replaces zone provider; no second clock/body bar. Save later restores five raw fields and does not replay step.
+ApplyStep private impure, returns false before any body mutation when prevalidation fails. ResolveExposure and EmptyHours private pure; all numeric locals/inputs double precision. Actual pin names and interface event implementation verify. No passive health recovery until later rest contract. Future climate replaces zone provider; no second clock/body bar. Save later restores five raw fields and does not replay step.
 ## Acceptance
 Fresh fixture 1 game h at -10: W=.6 R=.94 T=.92 F=.95 C=1. At 3h total W=0 C=.9 (only after empty). +5 for next hour W=.2 C=.9 (no recovery yet). Equal one hour vs four quarter hours at fixed input, within 1e−5. Debug replenish affects only chosen need, not clock. Spatial test (override cleared): from partially depleted warmth, walk across Box boundary and advance 900 game seconds. Inside gain +0.05, outside loss −0.10 while within bar limits; other needs drain equally. Debug source changes after the step. Invalid zone fallback must be conspicuously labeled and logged in local review; not shipping behavior. External setter inaccessible. PIE NOT RUN.
