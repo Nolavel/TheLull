@@ -122,12 +122,16 @@ class Beliefs:
         bonus=max(-0.5,min(2.5,signed*reliability))
         calm=[r for r in records if r["weather_cue"]=="calm"]
         storm=[r for r in records if r["weather_cue"]=="storm"]
+        calm_mean=(sum(r["minutes"] for r in calm)/len(calm)) if calm else None
+        # "Storm-specific" must exceed observed calm-route error. Otherwise
+        # even a persistently underestimated road would be mislabelled weather.
         # Labels are hypotheses from witnessed data, not known ground truth.
         if n<2:
             attribution="insufficient_comparable_experience"
         elif current_cue=="calm" and means["minutes"]>0:
             attribution="repeatable_calm_route_underestimate"
-        elif current_cue=="storm" and means["minutes"]>0 and calm:
+        elif (current_cue=="storm" and means["minutes"]>0
+              and calm_mean is not None and means["minutes"]>calm_mean):
             attribution="storm_specific_excess"
         elif means["minutes"]<=0 and means["core"]<=0:
             attribution="cost_not_underestimated"
