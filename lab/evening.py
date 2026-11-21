@@ -103,7 +103,8 @@ class Room:
 
 
 def step_body(body: Body, room: Room, outside_c: float, hours: float, asleep: bool,
-              fatigue_per_h: float = 0.0) -> float:
+              fatigue_per_h: float = 0.0,
+              *, clothing_c: float = CLOTHING_INSULATION_C) -> float:
     """Advance body and room on one clock; refund unspent fuel at terminal crossing.
 
     Call after room.step(hours). The room snapshot allows a partial final tick;
@@ -116,7 +117,7 @@ def step_body(body: Body, room: Room, outside_c: float, hours: float, asleep: bo
              room.burned_fuel_total, room.fire_hours_total) = previous
         return 0.0
     used = hours
-    if previous is not None and body.hours_until_terminal(room.felt_c(outside_c), hours) < hours - 1e-9:
+    if previous is not None and body.hours_until_terminal(room.felt_c(outside_c), hours, clothing_c) < hours - 1e-9:
         # The heat of a room can change during the step. Solve the first
         # crossing using the same end-of-step felt-temperature approximation.
         lo, hi = 0.0, hours
@@ -126,7 +127,7 @@ def step_body(body: Body, room: Room, outside_c: float, hours: float, asleep: bo
                              heated_offset_c=previous[1], fire_lit=previous[2],
                              burned_fuel_total=previous[3], fire_hours_total=previous[4])
             shadow.step(mid)
-            if body.hours_until_terminal(shadow.felt_c(outside_c), mid) < mid - 1e-12:
+            if body.hours_until_terminal(shadow.felt_c(outside_c), mid, clothing_c) < mid - 1e-12:
                 hi = mid
             else:
                 lo = mid
@@ -134,7 +135,7 @@ def step_body(body: Body, room: Room, outside_c: float, hours: float, asleep: bo
         (room.fuel, room.heated_offset_c, room.fire_lit,
          room.burned_fuel_total, room.fire_hours_total) = previous
         room.step(used)
-    step_core(body, room.felt_c(outside_c), used)
+    step_core(body, room.felt_c(outside_c), used, clothing_c=clothing_c)
     billed = body.last_step_hours
     if billed < used - 1e-8 and previous is not None:
         # Numerical boundary: refund the last microscopic partial interval.
