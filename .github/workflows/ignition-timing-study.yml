@@ -1,0 +1,49 @@
+name: ignition-timing-study
+
+on:
+  push:
+    branches: [ue-codex]
+    paths:
+      - "lab/**"
+      - ".github/workflows/ignition-timing-study.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  finite-stove-time:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: First terminal-state and heating-contract tests
+        run: |
+          python3 -m unittest lab.tests.test_terminal_contract lab.tests.test_ignition_timing_study -v
+      - name: Same worlds, finite fuel, four ignition strategies
+        run: |
+          mkdir -p ignition-results
+          python3 -m lab.ignition_timing_study --seeds 30 --days 7 --json ignition-results/paired.json | tee ignition-results/summary.txt
+          python3 - <<'PY' | tee -a "$GITHUB_STEP_SUMMARY"
+          import json
+          r=json.load(open("ignition-results/paired.json",encoding="utf-8"))
+          print("## When to light the stove: controlled player strategies")
+          print(f"Matched scenarios per policy: {r['design']['cases_per_policy']}; capped at 7 in-game days.")
+          print("| World | Policy | Capped elapsed hours | Mean early ignitions | Delivered fuel | Final fuel | Paired hours change |")
+          print("|---|---|---:|---:|---:|---:|---|")
+          for variant, group in r["groups"].items():
+              for policy, v in group.items():
+                  print(f"| {variant} | {policy} | {v['mean_elapsed_hours']} | "
+                        f"{v['mean_ignition_events_before_evening']} | {v['mean_fuel_delivered']} | "
+                        f"{v['mean_final_fuel']} | {v['paired_time_change']} |")
+          print("\\nChecks:",r["checks"])
+          print("Identical weather; no fuels/temperature coefficients are tuned; runs at horizon are censored.")
+          assert all(v == 0 for v in r["checks"].values()),r["checks"]
+          PY
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: ignition-timing-json
+          path: ignition-results/
