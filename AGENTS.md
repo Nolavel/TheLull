@@ -7,7 +7,7 @@
 
 **Перед началом проектирования, изменения или переноса survival-логики читать [`docs/gameplay/SURVIVAL_MANIFEST.md`](docs/gameplay/SURVIVAL_MANIFEST.md).** Это обязательный вход в работу для всех агентов, не факультативный референс. Его четыре условия: (1) начинать с core loop The Long Dark → самостоятельный loop TheLull; (2) сопоставлять TLD, жанр, реальный Hoarbound и документальный Key West; (3) выводить исполнимый UE-контракт в формате **один Markdown — один Blueprint/UE asset**; (4) проверять причинную цену через соседние системы, ночь, сохранение и в итоге живого игрока.
 
-**Сборочные трафареты:** [`docs/blueprints/README.md`](docs/blueprints/README.md), первый пакет — [`docs/blueprints/survival_f00/`](docs/blueprints/survival_f00/). Существующий план F00 — [`docs/gameplay/reference/SURVIVAL_FOUNDATION_00_TO_UE.md`](docs/gameplay/reference/SURVIVAL_FOUNDATION_00_TO_UE.md). Список и последовательность проверены до создания следующего Blueprint; реальную компиляцию/PIE нельзя подменять текстом или Python.
+**Сборочные трафареты:** [`docs/blueprints/README.md`](docs/blueprints/README.md), первый пакет — [`docs/blueprints/project/`](docs/blueprints/project/README.md). Существующий план F00 — [`docs/gameplay/reference/SURVIVAL_FOUNDATION_00_TO_UE.md`](docs/gameplay/reference/SURVIVAL_FOUNDATION_00_TO_UE.md). Список и последовательность проверены до создания следующего Blueprint; реальную компиляцию/PIE нельзя подменять текстом или Python.
 
 ## Ветки — строгое правило
 
@@ -35,8 +35,14 @@
   Visual Studio и нет смысла в компиляции.
 - **Когда появится машина мощнее** — переходим в режим Remote (агент работает прямо на машине автора)
   и переписываем на C++ то, что этого требует по конкретной причине, а не ради самого C++.
-- Логика, написанная облачным агентом, передаётся **трафаретом** (`docs/blueprints/`), а не описанием
-  словами: трафарет воспроизводится в редакторе и сверяется с результатом.
+- Логика, написанная облачным агентом, передаётся **трафаретом** ([`docs/blueprints/project/`](docs/blueprints/project/README.md)),
+  а не описанием словами. Зеркало `Content/` и `Config/` задаёт точные **будущие пути настоящего UE-проекта**;
+  один MD = один asset либо конфигурационный файл. Текстовые файлы не заменяют `.uasset`.
+- Локальный **Claude Code через реально подключённый Unreal MCP** собирает asset в открытом UE 5.8.4,
+  компилирует, сохраняет, проверяет runtime/PIE, сравнивает actual с stencil и фиксирует доказательства,
+  расхождения и улучшения в [`BACKLOG.md`](docs/blueprints/project/BACKLOG.md) в **своей** ветке `ue-claudeflow`.
+  При недоступной MCP-операции честно ставить BLOCKED, не имитировать исполнение. Изменения stencil
+  передаются Codex через handoff, а не правкой чужой ветки.
 
 ## Commit и push
 
@@ -122,6 +128,17 @@ PR / merge по решению автора`.
 
 - С автором общаться по-русски. Документация и карточки — на русском.
 - Названия классов, файлов, технологий и код — на английском. Комментарии в коде — на английском, коротко.
+
+## Справочник UE 5.8 — проверять, а не вспоминать
+
+Строгий baseline — установленная **UE 5.8.4**. Перед каждым новым Blueprint или правкой graph/pins
+открыть официальную [документацию Epic для UE 5.8](https://dev.epicgames.com/documentation/en-us/unreal-engine),
+[Blueprint API](https://dev.epicgames.com/documentation/en-us/unreal-engine/BlueprintAPI),
+[Blueprint Visual Scripting](https://dev.epicgames.com/documentation/en-us/unreal-engine/blueprints-visual-scripting-in-unreal-engine).
+Полный набор ссылок и технология сверки — в [манифесте](docs/gameplay/SURVIVAL_MANIFEST.md).
+Epic маркирует справочник UE 5.8, не отдельный hotfix 5.8.4; расхождения проверить в **самом локальном редакторе**.
+Имена инструментов MCP не предполагать — сначала проверить, что они реально доступны. Возможности UE 5.9
+не применять как доказательство совместимости с 5.8.4.
 
 ## Готовое раньше своего
 
