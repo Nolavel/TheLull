@@ -7,7 +7,7 @@
 Контракты: [Issue #6](https://github.com/Nolavel/TheLull/issues/6) — проблема конца забега;
 [CI: ignition-timing-study](https://github.com/Nolavel/TheLull/actions/runs/44854715696)
 — парное исследование;
-[`lab/ignition_timing_study.py`](../../lab/ignition_timing_study.py)
+[`lab/ignition_timing_study.py`](../../../lab/ignition_timing_study.py)
 — исполнимая методика (путь при чтении документа из GitHub: `lab/ignition_timing_study.py`).
 
 **Терминальный переход теперь фиксируется непосредственно при достижении температуры в `Body.step_core`, внутри физического шага.** В `Body` сохраняются `terminal_reason`, `terminal_at_minute`, `elapsed_minutes`. Повторный нагрев не отменяет состояние. `sim.run_day`, `survival_loop._shelter_wait` и `evening_run.play` останавливаются сразу: не начисляют результат незавершённой работы/поиска, не телепортируют найденное в дом, не тратят оставшееся время и топливо. В истории частичные сутки отмечаются `completed_dawn=False`, `next_dawn_minute=None`; `minutes_accounted` — только реально прожитый интервал. Полные сутки по-прежнему должны равняться ровно 1440 минутам. Пробуждение от холода до порога остаётся отдельным действием. Есть регрессии для любого повторного прогрева после предельного состояния, ранней остановки на улице/в доме/ночью и честного времени.
