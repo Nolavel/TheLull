@@ -7,10 +7,17 @@
 
 ## Unreleased
 
+### Decision (UE 5.8.4 source verification + mirrored project stencils + Claude MCP backlog, 21.11.2026)
+
+- Расширен [survival-манифест](docs/gameplay/SURVIVAL_MANIFEST.md): обязательная официальная справка **Epic UE 5.8** и проверка реальных pin/asset classes в установленном **UE 5.8.4**, capability-check текущего Unreal MCP без выдуманных операций.
+- Первый F00-пакет теперь является [зеркалом UE-проекта](docs/blueprints/project/README.md): `project/Content/Survival/Time/`, `project/Content/Tests/`, `project/Content/Maps/`, `project/Config/` с **одним MD на один фактический UE asset/config**; пути соответствуют будущим `.uasset`, `.umap`, `.ini` в *реальном* локальном проекте.
+- [Claude Code build-feedback backlog](docs/blueprints/project/BACKLOG.md) — после атомарной сборки через Unreal MCP Claude обязан Compile/Save/inspect/PIE, сравнить actual с MD, записать errors/improvements с evidence и передать Codex уточнения для контрактов. **Сейчас только `NOT RUN` и preflight; Unreal-ассеты не создавались, MCA/PIE не проверены.** Инструкции закреплены в `AGENTS.md`, `CLAUDE.md`, `CODEX.md`. Codex / `ue-codex`.
+
+
 ### Decision (обязательный survival-манифест и первый редакторский маршрут, 21.11.2026)
 
 - [`docs/gameplay/SURVIVAL_MANIFEST.md`](docs/gameplay/SURVIVAL_MANIFEST.md) — четыре обязательных условия: полный loop TLD→TheLull, сопоставление TLD/жанра/Hoarbound/Key West, проверяемый Blueprint-контракт и сквозная/человеческая приёмка; закреплено в `AGENTS.md` и `CODEX.md`.
-- [`docs/blueprints/survival_f00/`](docs/blueprints/survival_f00/) — отдельные `.md` на четыре UE assets: struct шага, interface, world clock, тестовый actor; зависимости, типы, ordered graph, правила owner/save и PIE критерии. Трафареты в `ue-codex`, **`.uasset` не собраны, PIE не запускался**, `production` не трогали. Codex / `ue-codex`.
+- [`docs/blueprints/project/`](docs/blueprints/project/) — отдельные `.md` на четыре UE assets: struct шага, interface, world clock, тестовый actor; зависимости, типы, ordered graph, правила owner/save и PIE критерии. Трафареты в `ue-codex`, **`.uasset` не собраны, PIE не запускался**, `production` не трогали. Codex / `ue-codex`.
 
 
 ### Research (D2.0: the lost opportunity changes tomorrow's actual purpose, 21.11.2026)
