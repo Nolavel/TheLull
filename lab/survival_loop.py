@@ -19,6 +19,12 @@ from .body import DEATH_C, Body
 from .evening import Room, Tomorrow, UNDECIDED, SHORT_WALK, choose, options, step_body
 from .evening_run import play
 from .heat_choice import LIGHT, DecisionProvider, make_heat_decision
+from .coupled_microloop import Equipment
+from .clothing_followthrough import followup_work
+from .overnight_goal_policy import (
+    PROTECT, FUEL, WORK, GOALS, RECOVER, FORAGE, FINISH,
+    pressure as goal_pressure, choose_morning,
+)
 from .sim import DEPART_AFTER_DAWN_MIN, DayRecord, Decision, clock, run_day
 from .world import DAY_MINUTES, World
 
@@ -72,7 +78,10 @@ def run(seed: int, days: int = 3, *, variant: str = "B_readable",
         initial_furniture: int = 2, recheck_policy: bool = True,
         heating_policy: str = "dusk",
         decision_provider: DecisionProvider | None = None,
-        carry_night_intent: bool = False) -> dict:
+        carry_night_intent: bool = False,
+        goal_policy: str | None = None,
+        initial_goal: str = FUEL,
+        work_deadline_minute: float = 2880.0) -> dict:
     """Advance one shared state. Partial days are NOT credited as dawns."""
     if days < 1:
         raise ValueError("days must be positive")
@@ -82,10 +91,24 @@ def run(seed: int, days: int = 3, *, variant: str = "B_readable",
         raise ValueError(f"unknown heating policy: {heating_policy}")
     if decision_provider is not None and heating_policy != "agent":
         raise ValueError("human decisions are only accepted in heating_policy=agent")
+    if goal_policy not in (None,"adaptive","frozen"):
+        raise ValueError("goal_policy must be None/adaptive/frozen")
+    if goal_policy is not None and initial_goal not in GOALS:
+        raise ValueError("unknown initial goal")
+    if goal_policy is not None and (intentions or carry_night_intent):
+        raise ValueError("D1.9 cannot be combined with legacy intent controls")
+    if work_deadline_minute <= 0:
+        raise ValueError("deadline must be positive")
     world = World.load("district_v0", variant)
     agent = Agent(profile, world, allow_rechecks=recheck_policy)
     body = Body()
     room = Room(fuel=world.start_fuel, furniture=initial_furniture)
+    # Persistent dry equipment across actual days. The canonical outdoor
+    # controller does not yet wet clothing; we do not pretend otherwise.
+    gear = Equipment()
+    pending_work = goal_policy is not None
+    active_goal = initial_goal if goal_policy is not None else None
+    previous_goal_report = None
     loot_rng = random.Random(f"{seed}:loot")
     history = []
     end_reason = None
@@ -104,6 +127,33 @@ def run(seed: int, days: int = 3, *, variant: str = "B_readable",
         day_record = DayRecord(day=day, fuel_morning=room.fuel)
         plan = intentions[(day - 1) % len(intentions)] if intentions else UNDECIDED
         arriving_intent = from_previous_night
+        dawn_goal_choice = None
+        goal_at_dawn = active_goal
+        dawn_pressure = None
+        work_action = None
+        before_night_goal_pressure = None
+        after_night_goal_pressure = None
+        overnight_goal_trace = None
+        if goal_policy is not None and not body.terminal:
+            dawn_pressure = goal_pressure(
+                body,room,world,pending_work=pending_work,
+                deadline_minute=work_deadline_minute
+            )
+            if day>1:
+                active_goal=(
+                    previous_goal_report["after_night"]["goal"]
+                    if goal_policy=="adaptive" and previous_goal_report
+                    else initial_goal
+                )
+            goal_at_dawn=active_goal
+            dawn_goal_choice=(
+                choose_morning(active_goal,body,room,agent,world,
+                               pending_work=pending_work,
+                               deadline_minute=work_deadline_minute)
+                if active_goal is not None else None
+            )
+            if active_goal==PROTECT:
+                plan=SHORT_WALK
         # Preserve the author's explicit plans. Under the opt-in experiment
         # only, a disrupted night can revise an otherwise undecided next day.
         if (carry_night_intent and not intentions and arriving_intent is not None
@@ -222,19 +272,51 @@ def run(seed: int, days: int = 3, *, variant: str = "B_readable",
 
         if not body.terminal:
             phase = "trip"
-            # Replanning depends only on last night's OBSERVED wake and present
-            # core/fatigue/fuel. No future weather or inaccessible loot.
-            shelter_recovery = bool(
-                carry_night_intent and arriving_intent is not None
-                and arriving_intent["wants_recovery"]
-                and room.fuel > 0
-                and (body.core_c < 35.8 or body.fatigue > 80.0)
-            )
-            day_record, _ = run_day(
-                world, agent, weather, loot_rng, day, fuel_at_departure,
-                body=body, charge_legacy_night=False,
-                stay_home_for_recovery=shelter_recovery,
-            )
+            if (goal_policy is not None and dawn_goal_choice is not None
+                    and dawn_goal_choice["choice"]==FINISH):
+                phase="shelter_task"
+                work_action=followup_work(
+                    body,room,world,rest_if_tired=False,gear=gear
+                )
+                pending_work=pending_work and not work_action["completed"]
+                day_record.decisions.append(Decision(
+                    time=clock(world.dawn_min+DEPART_AFTER_DAWN_MIN),
+                    point="задача в убежище",intention=goal_at_dawn,
+                    cues=dawn_goal_choice["cues"],
+                    alternatives=dawn_goal_choice["alternatives"],
+                    choice=FINISH,reason=dawn_goal_choice["reason"],
+                    outcome=f"выполнено={work_action['completed']}; "
+                            f"оплачено={work_action['total_minutes']:.2f}мин, "
+                            f"stamina={body.stamina:.2f}",
+                    belief_update="реальное исполнение без внезапной награды"
+                ))
+                day_record.next_intention=(
+                    "работа выполнена" if work_action["completed"]
+                    else "задача осталась открытой"
+                )
+            else:
+                shelter_recovery = (
+                    goal_policy is not None
+                    and dawn_goal_choice is not None
+                    and dawn_goal_choice["choice"]==RECOVER
+                ) or bool(
+                    carry_night_intent and arriving_intent is not None
+                    and arriving_intent["wants_recovery"]
+                    and room.fuel > 0
+                    and (body.core_c < 35.8 or body.fatigue > 80.0)
+                )
+                day_record, _ = run_day(
+                    world, agent, weather, loot_rng, day, fuel_at_departure,
+                    body=body, charge_legacy_night=False,
+                    stay_home_for_recovery=shelter_recovery,
+                )
+                if shelter_recovery and goal_policy is not None:
+                    d=day_record.decisions[0]
+                    d.intention=goal_at_dawn
+                    d.reason=dawn_goal_choice["reason"]
+                    d.cues=dawn_goal_choice["cues"]
+                    d.alternatives=dawn_goal_choice["alternatives"]
+                    d.choice=RECOVER
 
         if not body.terminal:
             # A returned trip deposits only what actually made it home.
@@ -249,7 +331,8 @@ def run(seed: int, days: int = 3, *, variant: str = "B_readable",
                 body.packed = False
                 return_minute = float(day_record.actual_return)
             else:
-                return_minute = float(departure)
+                # Real morning task may have billed time after planned departure.
+                return_minute=float(world.dawn_min+body.elapsed_minutes-start_elapsed)
 
             phase = "day_shelter"
             if heating_policy == "on_return":
@@ -304,6 +387,12 @@ def run(seed: int, days: int = 3, *, variant: str = "B_readable",
                     night_args["on_fire_opportunity"] = (
                         lambda point, hours: decide_stove(point, min(hours, 2.0))
                     )
+                if goal_policy is not None:
+                    before_night_goal_pressure=goal_pressure(
+                        body,room,world,pending_work=pending_work,
+                        deadline_minute=work_deadline_minute
+                    )
+                    night_args["clothing_c"]=gear.clothing_c
                 night = play(
                     proposed["option"], world.air_temp_c, room, body,
                     agent.beliefs, **night_args
@@ -363,6 +452,47 @@ def run(seed: int, days: int = 3, *, variant: str = "B_readable",
                 "fuel_at_decision": round(room.fuel, 4),
             }
         from_previous_night = night_next_intent
+        if goal_policy is not None:
+            after_night_goal_pressure=goal_pressure(
+                body,room,world,pending_work=pending_work,
+                deadline_minute=work_deadline_minute
+            )
+            after_goal=after_night_goal_pressure["goal"]
+            def preview(next_goal):
+                return (choose_morning(next_goal,body,room,agent,world,
+                                       pending_work=pending_work,
+                                       deadline_minute=work_deadline_minute)
+                        if next_goal is not None and not body.terminal else None)
+            chosen_next=preview(after_goal)
+            frozen_next=preview(initial_goal)
+            pressure_control_next=preview(
+                before_night_goal_pressure["goal"]
+                if before_night_goal_pressure is not None else None
+            )
+            overnight_goal_trace={
+                "policy":goal_policy,
+                "assigned_initial_goal":initial_goal,
+                "goal_at_this_dawn":goal_at_dawn,
+                "morning_decision":dawn_goal_choice,
+                "work_action":work_action,
+                "before_night":before_night_goal_pressure,
+                "after_night":after_night_goal_pressure,
+                "changed_pressure_during_night":bool(
+                    before_night_goal_pressure is not None
+                    and before_night_goal_pressure["goal"]!=after_goal
+                    and after_goal is not None
+                ),
+                "next_dawn_adaptive_preview":chosen_next,
+                "next_dawn_frozen_preview":frozen_next,
+                "next_dawn_pre_night_pressure_preview":pressure_control_next,
+                "next_goal_causal_reason":after_night_goal_pressure["reason"],
+                "night_observed_wakes":night["woke_cold"] if night else None,
+                "night_actual_fuel_spent":round(
+                    room.burned_fuel_total-fuel_burned_at_dawn,5
+                ),
+                "no_future_weather_used":True,
+            }
+            previous_goal_report={"after_night":after_night_goal_pressure}
         elapsed_today = body.elapsed_minutes - start_elapsed
         if body.terminal:
             end_reason = body.terminal_reason
@@ -401,6 +531,9 @@ def run(seed: int, days: int = 3, *, variant: str = "B_readable",
             "fuel_at_dawn": round(fuel_at_dawn, 3),
             "fuel_at_departure": round(fuel_at_departure, 3),
             "arriving_intention": arriving_intent,
+            "goal_continuity":overnight_goal_trace,
+            "pending_work_at_next_dawn":pending_work if goal_policy is not None else None,
+            "gear_wetness_at_next_dawn":gear.wetness if goal_policy is not None else None,
             "night_formed_next_intention": night_next_intent,
             "evening_decision": asdict(evening_trace) if evening_trace else None,
             "stove_decisions": [asdict(d) for d in stove_decisions],
@@ -475,6 +608,9 @@ def run(seed: int, days: int = 3, *, variant: str = "B_readable",
         "recheck_policy": recheck_policy,
         "heating_policy": heating_policy,
         "carry_night_intent": carry_night_intent,
+        "goal_policy":goal_policy,
+        "assigned_initial_goal":initial_goal if goal_policy is not None else None,
+        "pending_work_at_end":pending_work if goal_policy is not None else None,
         "decision_source": (
             "human" if decision_provider is not None
             else "agent" if heating_policy == "agent"
@@ -489,7 +625,10 @@ def run(seed: int, days: int = 3, *, variant: str = "B_readable",
             "Daytime choices still optimize fuel, not water/food.",
             "A fixed dawn+dusk schedule, no interpolated weather across midnight.",
             "No resource respawn or balance calibration.",
-            "Legacy sim.run and standalone linked_days remain separate baselines."
+            "Legacy sim.run and standalone linked_days remain separate baselines.",
+            "D1.9 opt-in goal continuity carries dry Equipment; outdoor controller does not implement wet clothing changes.",
+            "D1.9 uses a research heuristic for goal priorities, not emergent human desires.",
+            "Next-dawn preview uses same real post-night state, not the researcher's future weather."
         ],
     }
 
