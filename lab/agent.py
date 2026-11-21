@@ -77,6 +77,66 @@ class Beliefs:
     # not a known dry-clothing counterfactual, and not the world's hidden data.
     # key = traversed directed route string, value = most recent *signed* errors.
     trip_prediction_errors: dict[str, dict[str, float]] = field(default_factory=dict)
+    # D1.7 actor memory: observable weather context of each REAL completed
+    # outing, never the hidden true source of a surprise.
+    contextual_trip_history: dict[str, list[dict]] = field(default_factory=dict)
+
+    def observe_contextual_trip(self, route: str, *, weather_cue: str,
+                               predicted_minutes: float, actual_minutes: float,
+                               predicted_stamina: float, actual_stamina: float,
+                               predicted_core: float, actual_core: float) -> None:
+        if weather_cue not in ("calm", "storm", "mixed"):
+            raise ValueError("weather cue must be actually observed")
+        vals=(predicted_minutes,actual_minutes,predicted_stamina,actual_stamina,
+              predicted_core,actual_core)
+        if not route or not all(math.isfinite(v) for v in vals):
+            raise ValueError("invalid observed route/forecast")
+        if min(vals) < 0 or predicted_minutes <= 0 or actual_minutes <= 0:
+            raise ValueError("invalid observed physical cost")
+        self.contextual_trip_history.setdefault(route,[]).append({
+            "weather_cue":weather_cue,
+            "minutes":actual_minutes-predicted_minutes,
+            "stamina":actual_stamina-predicted_stamina,
+            "core":actual_core-predicted_core,
+        })
+
+    def contextual_assessment(self, route: str, *, current_cue: str) -> dict:
+        """Signed personal surprises matching CURRENT OBSERVED weather.
+
+        Mismatched weather is kept for comparison but never treated as a
+        standing route penalty. One example receives little confidence.
+        Causal source is uncertain: a wet-only experience does not prove
+        what dry clothes would have changed.
+        """
+        if current_cue not in ("calm","storm","mixed"):
+            raise ValueError("unobserved cue")
+        records=self.contextual_trip_history.get(route,[])
+        matched=[r for r in records if r["weather_cue"]==current_cue]
+        n=len(matched)
+        means={name:(sum(r[name] for r in matched)/n if n else 0.0)
+               for name in ("minutes","stamina","core")}
+        # Same first-order caution scales as D1.6, not retuned against holdout.
+        signed=(0.50*means["core"]+0.07*means["stamina"]+
+                0.015*means["minutes"])
+        reliability=n/(n+2.0)
+        bonus=max(-0.5,min(2.5,signed*reliability))
+        calm=[r for r in records if r["weather_cue"]=="calm"]
+        storm=[r for r in records if r["weather_cue"]=="storm"]
+        # Labels are hypotheses from witnessed data, not known ground truth.
+        if n<2:
+            attribution="insufficient_comparable_experience"
+        elif current_cue=="calm" and means["minutes"]>0:
+            attribution="repeatable_calm_route_underestimate"
+        elif current_cue=="storm" and means["minutes"]>0 and calm:
+            attribution="storm_specific_excess"
+        elif means["minutes"]<=0 and means["core"]<=0:
+            attribution="cost_not_underestimated"
+        else:
+            attribution="ambiguous_cause"
+        return {"matching_samples":n,"other_weather_samples":len(records)-n,
+                "signed_means":means,"reliability":reliability,
+                "bonus":bonus,"attribution":attribution,
+                "calm_samples":len(calm),"storm_samples":len(storm)}
 
     def observe_trip_prediction(
         self, route: str, *, predicted_minutes: float, actual_minutes: float,
