@@ -1,0 +1,48 @@
+name: agent-stove-decision-study
+
+on:
+  push:
+    branches: [ue-codex]
+    paths:
+      - "lab/**"
+      - ".github/workflows/agent-stove-decision-study.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  decision-vs-autoswitch:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Test human interface, two real alternatives and reproducibility
+        run: python3 -m unittest lab.tests.test_heat_choice lab.tests.test_stove_choice_study -v
+      - name: Pair 30 seeds per world/profile across seven strategies
+        run: |
+          mkdir -p stove-results
+          python3 -m lab.stove_choice_study --seeds 30 --days 7 --json stove-results/choices.json | tee stove-results/stdout.txt
+          python3 - <<'PY' | tee -a "$GITHUB_STEP_SUMMARY"
+          import json
+          r=json.load(open("stove-results/choices.json",encoding="utf-8"))
+          print("## Explicit stove choice — research only, no human participant")
+          print(f"Matched cases per arm: {r['design']['paired_cases_per_arm']}; horizon 7d, censored runs.")
+          print("| World | Arm | Mean capped h | Mean burned fuel | Fuel left | Decisions | Chose light/save | vs dusk h |")
+          print("|---|---|---:|---:|---:|---:|---|---:|")
+          for variant, arms in r["groups"].items():
+              for arm,v in arms.items():
+                  print(f"| {variant} | {arm} | {v['mean_capped_elapsed_h']} | "
+                        f"{v['mean_fuel_burned']} | {v['mean_fuel_remaining']} | "
+                        f"{v['decisions']} | {v['choices']} | {v['paired_to_dusk']['mean_delta_h']} |")
+          print("\\nChecks: ",r['checks'])
+          print("Forced choices are controls, not recordings of people. Outcomes are not gameplay validation.")
+          assert not any(r['checks'].values()),r['checks']
+          PY
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: stove-choice-results
+          path: stove-results/
