@@ -61,7 +61,10 @@ def simulate(seed: int, variant: str, profile: str, arm: str = "baseline",
     tracker = {"body": None, "room": None,
                "ever_hit_temperature_floor": False,
                "post_floor_rewarming_steps": 0,
-               "first_floor_phase": None}
+               "first_floor_phase": None,
+               "first_floor_absolute_h": None,
+               "day_counter": 0,
+               "elapsed_day_h": 0.0}
     segments = {p: {"h": 0.0, "lost_c": 0.0, "gained_c": 0.0,
                     "at_temperature_floor_h": 0.0, "burned_fuel": 0.0,
                     "fire_hours": 0.0} for p in PHASES}
@@ -81,10 +84,14 @@ def simulate(seed: int, variant: str, profile: str, arm: str = "baseline",
         if not record or person is not tracker["body"]:
             return
         delta = person.core_c - old_core
+        tracker["elapsed_day_h"] += hours
         if old_core > physiology.DEATH_C + 1e-7 and person.core_c <= physiology.DEATH_C + 1e-7:
             tracker["ever_hit_temperature_floor"] = True
             if tracker["first_floor_phase"] is None:
                 tracker["first_floor_phase"] = phase
+                tracker["first_floor_absolute_h"] = (
+                    (tracker["day_counter"] - 1) * 24.0 + tracker["elapsed_day_h"]
+                )
         elif (tracker["ever_hit_temperature_floor"] and
               old_core <= physiology.DEATH_C + 1e-7 and delta > 1e-8):
             tracker["post_floor_rewarming_steps"] += 1
@@ -170,6 +177,13 @@ def simulate(seed: int, variant: str, profile: str, arm: str = "baseline",
         finally:
             night_playing["active"] = False
 
+    original_weather_roll = World.roll_weather
+
+    def traced_weather_roll(world, rng):
+        tracker["day_counter"] += 1
+        tracker["elapsed_day_h"] = 0.0
+        return original_weather_roll(world, rng)
+
     def day_air(self, exposure, minute, weather):
         return original_felt(self, exposure, minute, weather) + 6.0
 
@@ -185,6 +199,7 @@ def simulate(seed: int, variant: str, profile: str, arm: str = "baseline",
 
     with ExitStack() as stack:
         if record:
+            stack.enter_context(patch.object(World, "roll_weather", traced_weather_roll))
             stack.enter_context(patch.object(survival_loop, "Body", capture_body))
             stack.enter_context(patch.object(survival_loop, "Room", capture_room))
             stack.enter_context(patch.object(sim, "step_core", traced_trip))
@@ -237,6 +252,11 @@ def simulate(seed: int, variant: str, profile: str, arm: str = "baseline",
         "ever_hit_temperature_floor": tracker["ever_hit_temperature_floor"],
         "post_floor_rewarming_steps": tracker["post_floor_rewarming_steps"],
         "first_floor_phase": tracker["first_floor_phase"],
+        "first_floor_absolute_h": tracker["first_floor_absolute_h"],
+        "elapsed_h_between_floor_and_reported_end": (
+            round(len(trace) * 24.0 - tracker["first_floor_absolute_h"], 4)
+            if tracker["first_floor_absolute_h"] is not None else 0.0
+        ),
         "stayed_with_insufficient_night_fuel": sum(
             (not d["day_trip"]["went_out"]) and
             d["fuel_at_departure"] >= 4.0 and d["fuel_at_departure"] < 14.0
@@ -310,6 +330,14 @@ def analyze(seeds: int = 30, days: int = HORIZON) -> dict:
                 "mean_first_morning_core_c": _mean(group, "first_dawn_end_core_c"),
                 "runs_ever_hitting_temperature_floor": sum(x["ever_hit_temperature_floor"] for x in group),
                 "runs_rewarming_after_floor": sum(x["post_floor_rewarming_steps"] > 0 for x in group),
+                "mean_h_to_first_floor_among_hits": round(mean(
+                    x["first_floor_absolute_h"] for x in group
+                    if x["first_floor_absolute_h"] is not None
+                ), 4) if any(x["first_floor_absolute_h"] is not None for x in group) else None,
+                "mean_h_unchecked_after_floor_among_hits": round(mean(
+                    x["elapsed_h_between_floor_and_reported_end"] for x in group
+                    if x["first_floor_absolute_h"] is not None
+                ), 4) if any(x["first_floor_absolute_h"] is not None for x in group) else None,
                 "first_floor_phases": dict(sorted(Counter(
                     x["first_floor_phase"] or "never" for x in group
                 ).items())),
@@ -418,6 +446,8 @@ def main() -> None:
             "first_evening_with_any_viable_forecast":
                 z["first_evening_with_any_viable_forecast"],
             "runs_rewarming_after_floor": z["runs_rewarming_after_floor"],
+            "mean_h_to_first_floor_among_hits": z["mean_h_to_first_floor_among_hits"],
+            "mean_h_unchecked_after_floor_among_hits": z["mean_h_unchecked_after_floor_among_hits"],
             "first_floor_phases": z["first_floor_phases"],
             "vs_baseline_count": z["vs_baseline_count"],
             "end_reasons": z["end_reasons"],
