@@ -38,6 +38,7 @@ class Body:
     fatigue: float = 0.0  # 0 rested, 100 spent
     stamina: float = 100.0
     recovery_per_h: float = RECOVERY_PER_H
+    packed: bool = False  # One-use evening preparation survives through the night until departure.
 
     def stamina_recovery_per_h(self) -> float:
         """Fatigue slows breath coming back (Hoarbound: recovery pace x energy)."""
