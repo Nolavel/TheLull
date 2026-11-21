@@ -1,0 +1,56 @@
+name: overnight-goal-continuity
+
+on:
+  push:
+    branches: [ue-codex]
+    paths:
+      - "lab/**"
+      - ".github/workflows/overnight-goal-continuity.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  real-night-next-goal:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Canonical night continuity and honest partial-dawn contracts
+        run: python3 -m unittest lab.tests.test_overnight_goal -v
+      - name: Paired adaptive vs frozen 3-day physical simulation
+        run: |
+          mkdir -p results
+          python3 -m lab.overnight_goal_study --seeds 12 --days 3 --json results/overnight-goal.json | tee results/summary.json
+          python3 - <<'PY' | tee -a "$GITHUB_STEP_SUMMARY"
+          import json
+          r=json.load(open("results/overnight-goal.json",encoding="utf-8"))
+          print("## D1.9 — actual trip/job → night → measured new goal → next morning")
+          print(f"Pairs: {r['design']['pair_count']}; initial goals: {r['design']['initial_goals']}")
+          print("Every arm shares weather seed but physically diverges after any differing decision.")
+          print("### Observed goal/choice transitions")
+          for k,v in sorted(r["counts"].items()):
+              print(f"- {k}: {v}")
+          print("\n### Actual outcomes")
+          for mode,row in r["outcomes"].items():
+              print(f"- {mode}: {row}")
+          print("\n### Night-to-dawn transitions")
+          if not r["night_to_dawn_examples"]:
+              print("No post-night pressure switch in surviving dawns — negative result.")
+          for x in r["night_to_dawn_examples"][:6]:
+              print(f"- {x['case']} day{x['day']}: "
+                    f"{x['before_night']['goal']} → {x['after_night']['goal']}; "
+                    f"reason={x['after_night']['reason']}; "
+                    f"adaptive action={x['adapted_next']['choice'] if x['adapted_next'] else 'none'}; "
+                    f"old-pressure action={x['old_pressure_next']['choice'] if x['old_pressure_next'] else 'none'}")
+          print("\nContract checks:",r["checks"])
+          assert all(v==0 for v in r["checks"].values()),r["checks"]
+          PY
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: overnight-goal-continuity-json
+          path: results/
