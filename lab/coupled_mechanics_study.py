@@ -64,8 +64,10 @@ def study(seeds: int = 30) -> dict:
                             checks["fabricated_dawn"] += 1
                         for dec in result["decisions"]:
                             valid = {x["option"] for x in dec["alternatives"] if x["available"]}
-                            if dec["choice"] not in valid or len(valid)<2:
-                                checks["no_real_alternatives"] += 1
+                            if dec["choice"] not in valid:
+                                checks["invalid_choice"] += 1
+                            if len(valid)<2:
+                                checks["forced_choice_observations"] += 1
                             if not dec["reason"] or not dec["outcome"]:
                                 checks["missing_decision_observation"] += 1
                 matched[(variant,profile,seed)] = block
@@ -125,11 +127,12 @@ def study(seeds: int = 30) -> dict:
         },
         "groups":rows,
         "factorial_interactions":interactions,
+        "observations":{"forced_choice_observations":checks["forced_choice_observations"]},
         "checks":{name:checks[name] for name in (
             "weather_not_paired","loot_conservation",
             "deposited_more_than_found","negative_fuel","free_fuel",
             "water_conservation","invalid_wetness","clock_bounds",
-            "terminal_clock","fabricated_dawn","no_real_alternatives",
+            "terminal_clock","fabricated_dawn","invalid_choice",
             "missing_decision_observation"
         )},
         "examples":{
