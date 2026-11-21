@@ -14,7 +14,7 @@ from dataclasses import asdict, dataclass
 from typing import Callable
 
 from .agent import Agent
-from .body import (Body, CLOTHING_INSULATION_C, IDLE_FATIGUE_PER_H,
+from .body import (Body, CLOTHING_INSULATION_C, COOLING_COEF, IDLE_FATIGUE_PER_H,
                    TRAVEL_FATIGUE_PER_H, step_core, step_fatigue)
 from .evening import Room, step_body
 from .evening_run import play
@@ -28,7 +28,8 @@ SEARCH_H = 1.0
 WET_INSULATION_LOSS_C = 5.0
 # A dry garment is the reference protection, not a survival objective.
 # Difference in cold exposure from *the same* environmental conditions.
-DRY_CORE_ADVANTAGE_C_PER_H = WET_INSULATION_LOSS_C * 0.079
+DRY_CORE_ADVANTAGE_C_PER_H = WET_INSULATION_LOSS_C * COOLING_COEF
+BELIEVED_DRY_ADVANTAGE_C_PER_H = 0.30  # tentative actor estimate, NOT true physics
 
 # The planned preparation itself differs; movement and destination do not.
 EXPLORE = "искать дрова сейчас"
@@ -135,7 +136,7 @@ def _choose(policy: str, stage: str, body: Body, room: Room,
         # using the same dry reference clothing; costs are fuel and time.
         # These are rough beliefs for a planned 2-hour walk, not an oracle.
         estimated_trip_h = 2.0 if stage == "morning" else 1.5
-        saved_core = gear.wetness * DRY_CORE_ADVANTAGE_C_PER_H * estimated_trip_h
+        saved_core = gear.wetness * BELIEVED_DRY_ADVANTAGE_C_PER_H * estimated_trip_h
         scarce_fuel = 0.8 if room.fuel <= 2.0 else 0.25
         drying_cost = DRY_H * scarce_fuel + 0.3  # hours unavailable for exploring
         cold_urgency = max(0.0, 36.0 - body.core_c)
