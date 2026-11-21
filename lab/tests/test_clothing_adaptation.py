@@ -38,6 +38,17 @@ class BodyFollowthrough(unittest.TestCase):
         self.assertTrue(r["completed"])
         self.assertAlmostEqual(body.elapsed_minutes,60)
 
+    def test_post_trip_work_preserves_wet_thermal_penalty(self):
+        world=make_world("B_readable",1)
+        def work(wet):
+            body=Body(core_c=37,stamina=90)
+            room=Room(fuel=0)
+            result=followup_work(body,room,world,gear=Equipment(wetness=wet))
+            self.assertTrue(result["completed"])
+            self.assertAlmostEqual(body.elapsed_minutes,60)
+            return body.core_c
+        self.assertGreater(work(0),work(1))
+
     def test_terminal_body_has_no_future_actions(self):
         world=make_world("C_unreadable",1)
         body=Body(core_c=28.8,stamina=100)
