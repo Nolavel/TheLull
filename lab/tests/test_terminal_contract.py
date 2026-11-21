@@ -37,6 +37,19 @@ class TerminalContract(unittest.TestCase):
         self.assertAlmostEqual(person.elapsed_minutes, used, places=5)
         self.assertEqual(_shelter_wait(room, person, 10.0, 50.0), 0.0)
 
+    def test_ignited_room_refunds_unspent_fuel_inside_terminal_tick(self):
+        person = Body(core_c=DEATH_C + 0.2)
+        room = Room(fuel=2.0, fire_lit=True)
+        used = _shelter_wait(room, person, -24.0, 60.0)
+        self.assertTrue(person.terminal)
+        self.assertGreater(used, 0)
+        self.assertLess(used, 60)
+        self.assertAlmostEqual(2.0 - room.fuel, used / 60.0, places=4)
+        self.assertAlmostEqual(person.terminal_at_minute, used, places=3)
+        snapshot = room.fuel
+        self.assertEqual(_shelter_wait(room, person, -24.0, 60.0), 0.0)
+        self.assertEqual(room.fuel, snapshot)
+
     def test_terminal_during_unfinished_trip_is_not_a_homecoming(self):
         world = World.load("district_v0", "B_readable")
         agent = Agent("local", world)
