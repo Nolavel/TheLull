@@ -71,7 +71,7 @@ def audit(candidate: Path) -> dict:
     reason_counts = collections.Counter()
     choices = collections.Counter()
     lengths = []
-    cold_end_without_enough_resources = 0
+    elapsed_days = []
     for variant in ("A_safe", "B_readable", "C_unreadable"):
         for profile in ("novice", "local"):
             for seed in range(1, 31):
@@ -81,17 +81,27 @@ def audit(candidate: Path) -> dict:
                     violations["determinism"] += 1
                 length = len(run["history"])
                 lengths.append(length)
+                elapsed_days.append(run["elapsed_days"])
                 reason_counts[run["end_reason"] or "horizon"] += 1
                 for index, day in enumerate(run["history"]):
-                    choices[day["evening"]["chose"][0]] += 1
-                    if abs(day["minutes_accounted"] - world.DAY_MINUTES) > 1e-5:
-                        violations["minutes"] += 1
-                    if day["night_hours"] <= 0 or day["night_hours"] > 14:
+                    if day["evening"]["chose"] != "NOT_REACHED":
+                        choices[day["evening"]["chose"][0]] += 1
+                    if day["completed_dawn"]:
+                        if (abs(day["minutes_accounted"] - world.DAY_MINUTES) > 1e-5
+                                or day["next_dawn_minute"] is None):
+                            violations["minutes"] += 1
+                    elif (not 0 < day["minutes_accounted"] < world.DAY_MINUTES
+                          or day["next_dawn_minute"] is not None
+                          or not day["end_reason"]):
+                        violations["partial_day_integrity"] += 1
+                    if not 0 <= day["night_hours"] <= 14:
+                        violations["night_window"] += 1
+                    if day["night_hours"] == 0 and day["completed_dawn"]:
                         violations["night_window"] += 1
                     if day["fuel_next_dawn"] < 0 or day["furniture_next_dawn"] < 0:
                         violations["negative_resource"] += 1
                     yield_by_furniture = 4 * max(0, day["furniture_at_dawn"] - day["furniture_next_dawn"])
-                    if day["fuel_next_dawn"] > day["fuel_at_dawn"] + day["carried"] + yield_by_furniture + 0.002:
+                    if day["fuel_next_dawn"] > day["fuel_at_dawn"] + day["fuel_delivered"] + yield_by_furniture + 0.002:
                         violations["free_fuel"] += 1
                     if index:
                         prev = run["history"][index - 1]
@@ -107,11 +117,13 @@ def audit(candidate: Path) -> dict:
                     violations["unexplained_end"] += 1
 
     samples["runs"] = 180
-    samples["mean_days"] = round(sum(lengths) / len(lengths), 2)
+    samples["mean_days"] = round(sum(lengths) / len(lengths), 2)  # begun, not completed
+    samples["mean_elapsed_days"] = round(sum(elapsed_days) / len(elapsed_days), 4)
     samples["end_reasons"] = dict(reason_counts)
     samples["evening_choices"] = dict(choices)
     samples["violations"] = dict(violations)
-    for target in ("minutes","night_window","fuel_reset","furniture_reset","core_reset",
+    for target in ("minutes","partial_day_integrity","night_window",
+                   "fuel_reset","furniture_reset","core_reset",
                    "fatigue_reset","free_fuel","negative_resource","unexplained_end","determinism"):
         record("runtime_" + target, violations[target] == 0,
                f"180 paired reproducible runs: {violations[target]} violations")
