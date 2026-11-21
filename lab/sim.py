@@ -65,6 +65,7 @@ class DayRecord:
     cold_night: bool = False
     next_intention: str = ""
     run_end_reason: str | None = None  # set on the last day when the run cannot go on
+    terminal_minute: float | None = None  # local within this 24-hour day, not a fake return
     decisions: list[Decision] = field(default_factory=list)
     events: list[str] = field(default_factory=list)
 
@@ -106,6 +107,10 @@ def run_day(world: World, agent: Agent, weather: DayWeather, lrng: random.Random
                     storm_start=weather.storm_start, storm_end=weather.storm_end, min_core_c=body.core_c)
     # Packing pays for a shorter morning setup; the clock stays absolute.
     depart = world.dawn_min + max(0, DEPART_AFTER_DAWN_MIN - (15 if body.packed else 0))
+    if body.terminal:
+        rec.terminal_minute = world.dawn_min + body.elapsed_minutes % (24 * 60)
+        rec.run_end_reason = body.terminal_reason
+        return rec, fuel
 
     if fuel >= world.fuel_per_night + 1:
         rec.decisions.append(Decision(
@@ -202,15 +207,19 @@ def run_day(world: World, agent: Agent, weather: DayWeather, lrng: random.Random
                     rec.events.append(f"{clock(now)} пора возвращаться: до темноты впритык (запас {agent.margin:.0f} мин)")
                     break
                 if left <= 0:
-                    rechecked_this_visit = True
-                    rec.recheck_searches += 1
                     rec.events.append(f"{clock(now)} перепроверяет {node}: оценка ноль, но пустота не подтверждена")
-                now += SEARCH_CHUNK_MIN
-                rec.search_minutes += SEARCH_CHUNK_MIN
                 felt = world.felt_outdoors_c(INDOOR_EXPOSURE, now, weather)
                 step_core(body, felt, SEARCH_CHUNK_MIN / 60.0)
-                step_fatigue(body, SEARCH_CHUNK_MIN / 60.0, asleep=False, per_hour=TRAVEL_FATIGUE_PER_H)
+                actual_search = body.last_step_hours * 60.0
+                now += actual_search
+                rec.search_minutes += actual_search
+                step_fatigue(body, body.last_step_hours, asleep=False, per_hour=TRAVEL_FATIGUE_PER_H)
                 rec.min_core_c = min(rec.min_core_c, body.core_c)
+                if body.terminal:
+                    break  # no loot credited if the search could not finish
+                if left <= 0:
+                    rechecked_this_visit = True
+                    rec.recheck_searches += 1
                 got = min(world.loot.get(node, 0), lrng.randint(1, 2), CARRY_CAPACITY - carried)
                 world.loot[node] = world.loot.get(node, 0) - got
                 carried += got
@@ -220,6 +229,8 @@ def run_day(world: World, agent: Agent, weather: DayWeather, lrng: random.Random
                     rec.empty_searches += 1
                     rec.events.append(f"{clock(now)} в {node} поиск ничего не дал — отметил пустым")
                 check_signal()
+            if body.terminal:
+                break
             returning, goal = True, "home"
             continue
 
@@ -262,19 +273,25 @@ def run_day(world: World, agent: Agent, weather: DayWeather, lrng: random.Random
                         rec.events.append(f"{clock(now)} ждать больше нельзя: "
                                           + ("мёрзнет" if body.is_hypothermic() else "темнеет") + " — выходит в бурю")
                         break
-                    now += WAIT_CHUNK_MIN
-                    waited += WAIT_CHUNK_MIN
                     felt = world.felt_outdoors_c(INDOOR_EXPOSURE if world.nodes[node]["kind"] != "waypoint"
-                                                 else 0.5, now, weather)
+                                                 else 0.5, now + WAIT_CHUNK_MIN, weather)
                     step_core(body, felt, WAIT_CHUNK_MIN / 60.0)
-                    step_fatigue(body, WAIT_CHUNK_MIN / 60.0, asleep=False)
+                    actual_wait = body.last_step_hours * 60.0
+                    now += actual_wait
+                    waited += actual_wait
+                    step_fatigue(body, body.last_step_hours, asleep=False)
                     rec.min_core_c = min(rec.min_core_c, body.core_c)
+                    if body.terminal:
+                        gave_up = True
+                        break
                 rec.plan_changes += 1
                 rec.waited_out_storm = not gave_up
                 storm_dec.outcome = (f"ждал {waited:.0f} мин, буря прошла" if not gave_up
                                      else f"ждал {waited:.0f} мин и всё равно пошёл в бурю")
                 rec.events.append(f"{clock(now)} переждал в {node} {waited:.0f} мин"
                                   if not gave_up else f"{clock(now)} выходит из {node} в бурю")
+                if body.terminal:
+                    break
                 if not gave_up:
                     storm_dec.belief_update = agent.observe_storm_duration(waited)
                     rec.storm_observed = True
@@ -288,14 +305,17 @@ def run_day(world: World, agent: Agent, weather: DayWeather, lrng: random.Random
             if storm_dec is not None and not storm_dec.outcome:
                 storm_dec.outcome = f"шёл открытой улицей {minutes:.0f} мин"
         predicted = agent.observe_edge(node, nxt, storm_now, minutes)
-        rec.actual_travel += minutes
         if minutes > predicted * 1.5:
             what = " в буре" if storm_now else (" в темноте" if not world.is_daylight(now) else "")
             rec.events.append(f"{clock(now)} {node}→{nxt}{what}: {minutes:.0f} мин вместо ожидаемых {predicted:.0f}")
         step_core(body, world.felt_outdoors_c(edge.exposure, now, weather), minutes / 60.0)
-        step_fatigue(body, minutes / 60.0, asleep=False, per_hour=TRAVEL_FATIGUE_PER_H)
-        now += minutes
+        actual_travel = body.last_step_hours * 60.0
+        step_fatigue(body, body.last_step_hours, asleep=False, per_hour=TRAVEL_FATIGUE_PER_H)
+        now += actual_travel
+        rec.actual_travel += actual_travel
         rec.min_core_c = min(rec.min_core_c, body.core_c)
+        if body.terminal:
+            break  # partial edge; not at nxt and no discovery
         node = nxt
         for found in agent.discover(node, world):
             rec.events.append(f"{clock(now)} в {node} увидел путь к {found}")
@@ -305,6 +325,14 @@ def run_day(world: World, agent: Agent, weather: DayWeather, lrng: random.Random
             rec.events.append(f"{clock(now)} замерзает в пути ({body.core_c:.1f}°) — бросает добычу и идёт домой")
             carried, now = 0, now + 30
             break
+
+    if body.terminal:
+        rec.crisis = True
+        rec.terminal_minute = now
+        rec.run_end_reason = body.terminal_reason
+        rec.carried = carried  # carried items never teleport to home
+        rec.events.append(f"{clock(now)} дальнейшее действие невозможно: {body.terminal_reason}")
+        return rec, fuel
 
     # What the player may learn about the sign: only what it could witness.
     # Daylight at home counts (a storm is visible and audible from a window); after dark, asleep, it does not.
@@ -367,8 +395,8 @@ def run_end_reason(world: World, body: Body, agent: Agent, fuel: int, cold_night
     Resources are finite by the author's decision and do not come back, so exhaustion is a legitimate
     ending, not a defect to balance away.
     """
-    if body.core_c <= DEATH_C + 0.2:
-        return "замёрз"
+    if body.terminal:
+        return body.terminal_reason or "температурный предел"
     if body.fatigue >= 100.0:
         return "силы кончились"
     if fuel <= 0 and not any(v > 0 for v in world.loot.values()):
