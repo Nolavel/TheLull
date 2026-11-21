@@ -67,9 +67,9 @@ class RecheckContract(unittest.TestCase):
     def test_known_good_stock_is_ranked_above_uncertain_recheck_at_equal_distance(self):
         world, agent = prepared_world()
         agent.beliefs.loot["house_b"] = 4.0
-        # Discovery of house_b might depend on world layout; known local profile has it.
-        if "house_b" in agent.beliefs.edge_minutes:
-            self.assertFalse(agent.can_recheck("house_b"))
+        ranked = agent.rank_targets()
+        self.assertEqual(ranked[0]["node"], "house_b")
+        self.assertFalse(ranked[0]["recheck"])
         self.assertEqual(agent.beliefs.loot["house_a"], 0)
 
 
