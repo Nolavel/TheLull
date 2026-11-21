@@ -29,7 +29,7 @@ def diagnose() -> dict:
                     "warm_options": warm_options,
                     "distinct_evening_choices": len(set(choices)),
                     "choices": choices,
-                    "plan_refusals": sum(not x["went_in_the_morning"] for x in result["plans"]),
+                    "plan_refusals": sum(not x["could_leave_in_the_morning"] for x in result["plans"]),
                     "morning_fatigue": [x["morning_fatigue"] for x in result["plans"]],
                 })
     summaries = []
