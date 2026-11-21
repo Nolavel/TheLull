@@ -17,7 +17,7 @@
 3. [`BP_SurvivalWorld.md`](survival_f00/BP_SurvivalWorld.md) → первый runtime-Actor, единственный clock.
 4. [`BP_F00ClockProbe.md`](survival_f00/BP_F00ClockProbe.md) → только тестовый actor для PIE-регрессии.
 
-После сборки каждого сверить `Package`, `ParentClass`, UE-тип каждого pin и собственника записи, затем Compile/Save. Если UE MCP или `uasset` выдал иной граф, сохранить расхождения; **не считать текст исполняемым Blueprint**. Следующая папка появляется лишь при реальном переходе к F01, без создания пустых классов впрок. Уровень `L_F00_TimeLab` (не Blueprint) создаётся по шагам из `BP_SurvivalWorld.md`.
+После сборки каждого сверить `Package`, `ParentClass`, UE-тип каждого pin и собственника записи, затем Compile/Save. Текущий `tools/check_stencil.py` сравнивает **Event graph только Blueprint Class** с выводом `uasset`: для `ST_` Structure и `BPI_` Interface он неприменим и не должен выдавать ложный PASS. Проверку этих двух ассетов делать по полям/сигнатурам вручную в редакторе до появления отдельного инструмента. Если UE MCP или `uasset` выдал иной граф, сохранить расхождения; **не считать текст исполняемым Blueprint**. Следующая папка появляется лишь при реальном переходе к F01, без создания пустых классов впрок. Уровень `L_F00_TimeLab` (не Blueprint) создаётся по шагам из `BP_SurvivalWorld.md`.
 
 ## Как это работает
 
