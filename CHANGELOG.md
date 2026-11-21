@@ -7,6 +7,11 @@
 
 ## Unreleased
 
+### Added (production: finite paid actions before geography, 21.11.2026)
+
+- Targeted publication from ue-codex@f366963d8528cc9b797cf5ed2abdd497c2d56007: 3 new stencil targets ST_CoreSupplies, BPC_CoreActions, BP_CoreRestSpot; Body gains controlled paid recovery and paid rest mode, Core level J/K/L routes actions, Debug reads finite stock, dependency audit extended (17 active targets). Water/food starter stock is a finite fixture, not world inventory; rest 900 game seconds only inside spatial RestSpot + warm zone. Hunger/thirst continue falling; no new clock.
+- All new/changed MD are **NEEDS CLOUD REVIEW / NOT ASSEMBLED / NO PIE**. Core action result pairs TimeResult with bCommitted; (Completed,false) after paid time is a latched action failure, no implicit rollback. No actual item pickup, save/load or long night. No lab/CI/branches other than targeted MD mirror changes. Codex / production.
+
 ### Added (finite paid core actions, 21.11.2026)
 
 - Added ST_CoreSupplies, BPC_CoreActions, BP_CoreRestSpot stencils. Drink/Eat pay the single clock then commit need + finite stock, Rest pays a 900s slice in spatially valid warm spot. Updated Body action recovery/rest mode, Debug stock/readouts, Level J/K/L, audit/backlog/research. Explicit stock is fixture only, not real inventory/SaveGame; UE/MCP/PIE not run, NEEDS REVIEW. Codex / ue-codex.
