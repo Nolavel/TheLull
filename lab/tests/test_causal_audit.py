@@ -40,7 +40,9 @@ class CausalAuditTest(unittest.TestCase):
         with_probes = simulate(1, "B_readable", "local", "baseline", 3,
                                choice_trace=trace)
         without_probes = simulate(1, "B_readable", "local", "baseline", 3)
-        self.assertTrue(trace)
+        self.assertEqual(len(trace), sum(
+            d["evening"]["chose"] != "NOT_REACHED" for d in with_probes["history"]
+        ))
         self.assertEqual(with_probes, without_probes)
 
 
