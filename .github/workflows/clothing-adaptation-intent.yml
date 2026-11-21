@@ -35,6 +35,13 @@ jobs:
           print("### Observed outcomes")
           for key,value in sorted(r["counts"].items()):
               print(f"- {key}: {value}")
+          print("\n### Strict belief-only plan changes (same estimated weather)")
+          for ex in r["strict_replan_examples"][:10]:
+              c=ex["case"]
+              print(f"- {c['variant']}/{c['profile']} ×{c['multiplier']} "
+                    f"seed={c['seed']}: "
+                    f"{ex['before']['choice']} → {ex['after']['choice']}")
+              print(f"  wet experience: {ex['wet_observation']['learning']}")
           print("\nContract checks:",r["checks"])
           print("A simulation of decision learning, NOT a full two-day physical playthrough or fun study.")
           assert all(v==0 for v in r["checks"].values()),r["checks"]
