@@ -102,7 +102,8 @@ def _predicted_trip(agent: Agent, node: str) -> float:
 def run_day(world: World, agent: Agent, weather: DayWeather, lrng: random.Random, day: int, fuel: int,
             signals_visible: bool = True, body: Body | None = None,
             *, charge_legacy_night: bool = True,
-            stay_home_for_recovery: bool = False) -> tuple[DayRecord, int]:
+            stay_home_for_recovery: bool = False,
+            stockpile_if_goal: bool = False) -> tuple[DayRecord, int]:
     body = body if body is not None else Body()
     rec = DayRecord(day=day, fuel_morning=fuel, margin=agent.margin, signal_trust=agent.beliefs.signal_trust(),
                     storm_start=weather.storm_start, storm_end=weather.storm_end, min_core_c=body.core_c)
@@ -129,7 +130,7 @@ def run_day(world: World, agent: Agent, weather: DayWeather, lrng: random.Random
         rec.events.append("ночной опыт изменил план: остался в убежище")
         return _finish_day(world, rec, fuel, charge_legacy_night)
 
-    if fuel >= world.fuel_per_night + 1:
+    if fuel >= world.fuel_per_night + 1 and not stockpile_if_goal:
         rec.decisions.append(Decision(
             clock(0), "выход", "топлива на ночь уже достаточно",
             ["в доме есть топливо на ночь"],
