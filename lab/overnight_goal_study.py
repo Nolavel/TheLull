@@ -20,6 +20,7 @@ from .survival_loop import run
 VARIANTS=("A_safe","B_readable","C_unreadable")
 PROFILES=("local","novice")
 POLICIES=("adaptive","frozen")
+START_FUELS=(1,2,4)
 
 
 def audit_history(story: dict) -> dict:
@@ -77,12 +78,24 @@ def audit_history(story: dict) -> dict:
         a=cont["after_night"]
         if b is not None and a is not None and day["completed_dawn"]:
             counts["paired_before_after_night"]+=1
+            time_only=cont["time_only_control_pressure"]
             if cont["changed_pressure_during_night"]:
-                counts["night_changed_pressure"]+=1
+                counts["pre_to_post_night_pressure_changed"]+=1
                 preview=cont["next_dawn_adaptive_preview"]
                 control=cont["next_dawn_pre_night_pressure_preview"]
                 if preview and control and preview["choice"]!=control["choice"]:
-                    counts["night_caused_new_action_on_same_state"]+=1
+                    counts["pre_to_post_night_action_changed"]+=1
+            if cont["physical_night_changed_pressure"]:
+                counts["physical_night_changed_pressure"]+=1
+                preview=cont["next_dawn_adaptive_preview"]
+                control=cont["next_dawn_time_only_control_preview"]
+                if preview and control and preview["choice"]!=control["choice"]:
+                    counts["physical_night_changed_action_vs_time_only"]+=1
+            if (time_only is not None and
+                time_only["goal"]!=cont["before_night"]["goal"]):
+                counts["clock_advance_changed_pressure"]+=1
+                if not cont["physical_night_changed_pressure"]:
+                    counts["clock_only_pressure_revision"]+=1
             if (cont["next_dawn_adaptive_preview"] and
                 cont["next_dawn_frozen_preview"] and
                 cont["next_dawn_adaptive_preview"]["choice"]!=
@@ -111,13 +124,14 @@ def study(seeds: int = 12,days: int = 3)->dict:
     transitions=[]
     cases=[]
     per_variant=defaultdict(Counter)
-    for variant,profile,goal,seed in product(
-        VARIANTS,PROFILES,GOALS,range(1,seeds+1)
+    for variant,profile,goal,initial_fuel,seed in product(
+        VARIANTS,PROFILES,GOALS,START_FUELS,range(1,seeds+1)
     ):
         arms={
             mode:run(seed,days,variant=variant,profile=profile,
                      initial_furniture=2,heating_policy="dusk",
-                     goal_policy=mode,initial_goal=goal)
+                     goal_policy=mode,initial_goal=goal,
+                     initial_fuel=initial_fuel)
             for mode in POLICIES
         }
         r0=arms["adaptive"]["history"][0]
@@ -134,7 +148,7 @@ def study(seeds: int = 12,days: int = 3)->dict:
             if (arms["adaptive"]["history"][i]["world_weather"]!=
                 arms["frozen"]["history"][i]["world_weather"]):
                 violations["unpaired_weather"]+=1
-        key=f"{variant}/{profile}/{goal}/seed{seed}"
+        key=f"{variant}/{profile}/{goal}/fuel{initial_fuel}/seed{seed}"
         sample={"case":key}
         for mode,story in arms.items():
             assessment=audit_history(story)
@@ -167,13 +181,14 @@ def study(seeds: int = 12,days: int = 3)->dict:
             }
         for day in arms["adaptive"]["history"]:
             cont=day["goal_continuity"]
-            if (day["completed_dawn"] and cont["changed_pressure_during_night"]
+            if (day["completed_dawn"] and cont["physical_night_changed_pressure"]
                 and len(transitions)<30):
                 transitions.append({
                     "case":key,"day":day["day"],
                     "initial_goal":cont["goal_at_this_dawn"],
                     "before_night":cont["before_night"],
                     "after_night":cont["after_night"],
+                    "time_only_control":cont["time_only_control_pressure"],
                     "night_actual":{
                         "wakes":day["night"]["woke_cold"],
                         "fuel_burned":day["fuel_burned_today"],
@@ -182,12 +197,14 @@ def study(seeds: int = 12,days: int = 3)->dict:
                     },
                     "adapted_next":cont["next_dawn_adaptive_preview"],
                     "old_pressure_next":cont["next_dawn_pre_night_pressure_preview"],
+                    "time_only_next":cont["next_dawn_time_only_control_preview"],
                 })
         if len(cases)<24:
             cases.append(sample)
     report={
         "design":{"seeds":seeds,"days":days,
-                  "pair_count":seeds*len(VARIANTS)*len(PROFILES)*len(GOALS),
+                  "pair_count":seeds*len(VARIANTS)*len(PROFILES)*len(GOALS)*len(START_FUELS),
+                  "starting_fuel_levels":START_FUELS,
                   "paired_arms":POLICIES,
                   "initial_goals":GOALS,
                   "weather_paired":True,
@@ -223,7 +240,9 @@ def study(seeds: int = 12,days: int = 3)->dict:
             "Initial goals experimentally assigned; pressure formation is explicit state rules, not learned independent values.",
             "A genuine dawn only counts if the actual real night completes; terminal partial days are not credited.",
             "Same Body/Room/Agent/world/loot persists across dawns WITHIN each arm; paired arms physically diverge after their first different choice.",
+            "Strict physical-night attribution compares observed post-night pressure against the PRE-night core/fatigue/stamina/fuel carried to the SAME post-night clock. Deadline-only changes are counted separately.",
             "Strict same-state goal contrast uses previews after the real night, not researcher-only future outcomes.",
+            "Seed weather repeats across fixed starting-fuel controls; these are paired conditions, not independent human sessions.",
             "One persistent DRY Equipment object (no evolving garment wetness in canonical run_day); this does not integrate D1.7 clothing physics.",
             "One finite pending 60-minute job; finished work not respawned.",
             "Automatic dusk ignition and night evening choices remain the same canonical baseline in both arms.",
