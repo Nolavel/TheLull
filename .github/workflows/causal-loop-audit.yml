@@ -42,6 +42,14 @@ jobs:
           print("|---|---:|---:|---|---|")
           for name,row in d["arms"].items():
               print(f"| {name} | {row['mean_completed_days']} | {row['mean_core_after_day1_c']} | {row['end_reasons']} | {row['paired_days_difference']} |")
+          print("\\n### Stratified by world variant and agent profile")
+          print("| World | Agent | Baseline days | Air +6C days | Half burn days |")
+          print("|---|---|---:|---:|---:|")
+          for variant, arms in d["by_variant_and_profile"].items():
+              for profile in ("novice", "local"):
+                  print(f"| {variant} | {profile} | {arms['baseline'][profile]['mean_days']} | "
+                        f"{arms['air_plus_6c'][profile]['mean_days']} | {arms['fuel_burn_half'][profile]['mean_days']} |")
+          print("\\nPaired novice/local differences: ", d["same_seed_profile_comparison"])
           c=d["counterfactual_evening"]
           print(f"\nCandidate choices observed: {c['observed_evenings']}; occasions with higher-core alternative: {c['evenings_with_alternative_raising_core_by_half_degree']}")
           print(f"\nWeather mismatch count: {d['checks']['weather_mismatches_across_paired_cases']}")
