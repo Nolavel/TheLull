@@ -28,7 +28,7 @@ jobs:
           python3 - <<'PY' | tee -a "$GITHUB_STEP_SUMMARY"
           import json
           r=json.load(open("results/overnight-goal.json",encoding="utf-8"))
-          print("## D1.9 — actual trip/job → night → measured new goal → next morning")
+          print("## D1.9 — actual day → night → measured physical-vs-time goal pressure → next morning")
           print(f"Pairs: {r['design']['pair_count']}; initial goals: {r['design']['initial_goals']}")
           print("Every arm shares weather seed but physically diverges after any differing decision.")
           print("### Observed goal/choice transitions")
@@ -43,9 +43,10 @@ jobs:
           for x in r["night_to_dawn_examples"][:6]:
               print(f"- {x['case']} day{x['day']}: "
                     f"{x['before_night']['goal']} → {x['after_night']['goal']}; "
+                    f"time-only={x['time_only_control']['goal']}; "
                     f"reason={x['after_night']['reason']}; "
                     f"adaptive action={x['adapted_next']['choice'] if x['adapted_next'] else 'none'}; "
-                    f"old-pressure action={x['old_pressure_next']['choice'] if x['old_pressure_next'] else 'none'}")
+                    f"time-only action={x['time_only_next']['choice'] if x['time_only_next'] else 'none'}")
           print("\nContract checks:",r["checks"])
           assert all(v==0 for v in r["checks"].values()),r["checks"]
           PY
