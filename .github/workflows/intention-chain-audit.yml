@@ -1,0 +1,47 @@
+name: intention-chain-audit
+
+on:
+  push:
+    branches: [ue-codex]
+    paths:
+      - "lab/**"
+      - ".github/workflows/intention-chain-audit.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  evening-to-next-day:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Dry insulation and overnight intention-link contracts
+        run: python3 -m unittest lab.tests.test_intention_chain -v
+      - name: Compare opt-in night replan against unchanged loop
+        run: |
+          mkdir -p intention-results
+          python3 -m lab.intention_chain_study --seeds 20 --days 5 --json intention-results/night-chain.json | tee intention-results/summary.json
+          python3 - <<'PY' | tee -a "$GITHUB_STEP_SUMMARY"
+          import json
+          r=json.load(open("intention-results/night-chain.json",encoding="utf-8"))
+          print("## Full decision chain: evening → night → next dawn")
+          print(f"Paired runs: {r['design']['cases']}, no human participants.")
+          print("| World | Mode | Mean capped h | Evening choices | Observed next goals |")
+          print("|---|---|---:|---|---|")
+          for variant, modes in r["results"].items():
+              for mode,x in modes.items():
+                  print(f"| {variant} | {mode} | {x['mean_actual_elapsed_h']} | {x['evening_choices']} | {x['night_formed_goals']} |")
+          print("\\nObserved night-to-dawn transitions:",r["observations"])
+          print("\\nContract errors:",r["checks"])
+          print("No replan and unchanged goal are valid negative results, not reasons to force a different outcome.")
+          assert all(v==0 for v in r["checks"].values()),r["checks"]
+          PY
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: complete-night-intent-chains
+          path: intention-results/
