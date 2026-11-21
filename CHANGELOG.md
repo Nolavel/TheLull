@@ -7,6 +7,11 @@
 
 ## Unreleased
 
+### Decision / Added (60-minute Hoarbound-style day and UE-native lighting, 21.11.2026)
+
+- Автор подтвердил сохранение Hoarbound day_duration=1800 real sec + night_duration=1800 real sec: 60 REAL min=24 game h. New pending-review `BP_RealtimeClockDriver` alone requests Clock.AdvanceGameTime(real elapsed × 24 game seconds) using pause-stopped, undilated UE world timing. The obsolete Level Timer of +60 game seconds per real second is **replaced**, not duplicated.
+- New pending-review `BP_DayNightLighting`: reads authoritative Clock, runs UE native DirectionalLight + SkyAtmosphere + SkyLight. Hoarbound 06/18 sunrise/sunset, ambient ramps 02→10 / 18→22, 4 game-minute sun steps with optional 2 real-second visual smoothing; no per-step SkyLight recapture or independent simulation time. Updated L_SurvivalCore, Debug UI (Day N HH:MM, PeriodName), dependency audit and handoff. No moon/weather/astronomical season model is claimed. NEEDS CLOUD REVIEW / UE 5.8.4/MCP/Compile/PIE NOT RUN, especially real light-node pins/low-end GPU. Codex / production.
+
 ### Added (Hoarbound day/night equivalent in UE, 21.11.2026)
 
 - New draft stencils BP_RealtimeClockDriver (24 game seconds per real second; full 60 real-minute day, pause-aware elapsed sampling), BP_DayNightLighting (UE native DirectionalLight/SkyAtmosphere/SkyLight; Hoarbound sunrise/sunset 06/18, 4 game-minute sun step, 2 real-second visual blend). Replaced obsolete L_SurvivalCore 60 game seconds/real second fixture driver to prevent double time and accidental 24-minute day; Debug time shows Day N HH:MM and period. Source Hoarbound main and Epic UE5.8. All NEEDS CLOUD REVIEW, no uassets/MCP/PIE, no weather or moon/geo implementation. Codex / ue-codex.
