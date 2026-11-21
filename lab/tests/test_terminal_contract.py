@@ -62,6 +62,28 @@ class TerminalContract(unittest.TestCase):
         self.assertEqual(room.furniture, 2)
         self.assertNotIn("утро:", "\n".join(outcome["log"]))
 
+    def test_cold_sleep_wakes_before_any_terminal_transition(self):
+        from lab.agent import Beliefs
+        sleeper = Body(core_c=35.8, fatigue=60)
+        room = Room(fuel=1, fire_lit=True, furniture=0, heated_offset_c=12.0)
+        result = play("B: лечь раньше на том, что есть", -12.0,
+                      room, sleeper, Beliefs(), hours_of_night=14)
+        self.assertGreater(result["woke_cold"], 0)
+        self.assertTrue(result["wake_events"])
+        # The model keeps its existing 'wake on cold' rule; terminal state
+        # is not a new mechanism for skipping the interruption.
+        if sleeper.terminal:
+            self.assertLess(result["wake_events"][0]["at"],
+                            result["night_elapsed_h"])
+
+    def test_restored_body_at_limit_cannot_be_reheated(self):
+        frozen_state = Body(core_c=DEATH_C, elapsed_minutes=97)
+        self.assertTrue(frozen_state.terminal)
+        self.assertEqual(frozen_state.terminal_at_minute, 97)
+        step_core(frozen_state, 20, 5)
+        self.assertEqual(frozen_state.elapsed_minutes, 97)
+        self.assertEqual(frozen_state.core_c, DEATH_C)
+
     def test_canonical_saves_partial_day_not_a_fabricated_dawn(self):
         for variant in ("B_readable", "C_unreadable"):
             result = run(3, 7, variant=variant, profile="local")
