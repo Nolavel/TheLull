@@ -41,6 +41,16 @@ class PreparationPayoffContracts(unittest.TestCase):
         self.assertLess(full["travel_minutes"],
                         data["prepared_heat_only"]["travel_minutes"])
 
+    def test_stamina_meter_does_not_yet_change_route_success(self):
+        # This is a deliberate exposed limitation: fatigue/stamina remaining
+        # has no speed/exhaustion gate in the current locomotion proxy.
+        r=evaluate(2,"A_safe",24)["arms"]
+        full=r["prepared_all"]
+        no_stamina=r["prepared_no_stamina"]
+        self.assertEqual(full["completed_return"],no_stamina["completed_return"])
+        self.assertAlmostEqual(full["elapsed_minutes"],no_stamina["elapsed_minutes"])
+        self.assertGreater(full["stamina_after_route"],no_stamina["stamina_after_route"])
+
     def test_drying_does_not_dominate_short_walk_time_and_fuel(self):
         data=evaluate(2,"A_safe",1)["arms"]
         wet=data["wet_now"]
