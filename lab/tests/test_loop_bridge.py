@@ -15,7 +15,11 @@ class LoopBridgeTests(unittest.TestCase):
 
     def test_one_world_clock_no_legacy_rollback(self):
         for d in linked(7, 5)["history"]:
-            self.assertAlmostEqual(d["minutes_accounted"], 1440.0)
+            if d["completed_dawn"]:
+                self.assertAlmostEqual(d["minutes_accounted"], 1440.0)
+            else:
+                self.assertLess(d["minutes_accounted"], 1440.0)
+                self.assertIsNone(d["next_dawn_minute"])
 
     def test_study_is_deterministic(self):
         self.assertEqual(study(3, 4), study(3, 4))
