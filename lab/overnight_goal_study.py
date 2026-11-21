@@ -16,6 +16,7 @@ from statistics import mean
 
 from .goal_priority_study import PROTECT, FUEL, WORK, GOALS
 from .survival_loop import run
+from .overnight_goal_policy import RECOVER, FORAGE, FINISH
 
 VARIANTS=("A_safe","B_readable","C_unreadable")
 PROFILES=("local","novice")
@@ -39,6 +40,20 @@ def audit_history(story: dict) -> dict:
                 if x["available"]
             ]:
                 errs["unavailable_choice"]+=1
+            if choice==RECOVER and day["day_trip"]["went_out"]:
+                errs["recovery_choice_became_trip"]+=1
+            if choice==FINISH and not cont["work_action"] and (
+                day["departure_minute"] is not None
+            ):
+                errs["chosen_work_not_executed"]+=1
+            if choice==FORAGE and not day["day_trip"]["went_out"]:
+                if day["terminal_at_minute"] is not None:
+                    counts["outdoor_trip_prevented_by_terminal"]+=1
+                elif any(
+                    x["available"] and x["option"]==FORAGE
+                    for x in cont["morning_decision"]["alternatives"]
+                ):
+                    errs["forage_choice_silently_canceled"]+=1
         if day["completed_dawn"]:
             if abs(day["minutes_accounted"]-1440)>1e-4 or day["next_dawn_minute"] is None:
                 errs["false_dawn"]+=1
@@ -65,6 +80,18 @@ def audit_history(story: dict) -> dict:
                 cont["goal_at_this_dawn"]!=story["assigned_initial_goal"]
             ):
                 errs["frozen_goal_changed"]+=1
+            previous_cont=prev["goal_continuity"]
+            preview=(
+                previous_cont["next_dawn_adaptive_preview"]
+                if story["goal_policy"]=="adaptive"
+                else previous_cont["next_dawn_frozen_preview"]
+            )
+            current=cont["morning_decision"]
+            if preview and current and (
+                preview["choice"]!=current["choice"] or
+                preview["goal"]!=current["goal"]
+            ):
+                errs["next_dawn_choice_not_carried"]+=1
             if day["gear_wetness_at_next_dawn"]!=prev["gear_wetness_at_next_dawn"]:
                 errs["gear_reset"]+=1
             counts["real_second_dawns"]+=1
@@ -234,7 +261,9 @@ def study(seeds: int = 12,days: int = 3)->dict:
             "frozen_goal_changed","gear_reset","phantom_unfinished_work",
             "free_work","credited_incomplete_day","lost_simulation_time",
             "terminal_after_time","nonidentical_initial_physics",
-            "unpaired_weather"
+            "unpaired_weather","recovery_choice_became_trip",
+            "chosen_work_not_executed","forage_choice_silently_canceled",
+            "next_dawn_choice_not_carried"
         )},
         "limits":[
             "Initial goals experimentally assigned; pressure formation is explicit state rules, not learned independent values.",
