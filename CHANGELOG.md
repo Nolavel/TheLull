@@ -7,6 +7,11 @@
 
 ## Unreleased
 
+### Decision / Added (Core before geography, 21.11.2026)
+
+- Новая поправка автора: TLD core → minimal HUD → Debug UI → география позже. Манифест, роли, индекс и размещение F00 исправлены в ue-codex, логика F00 не изменена. Production ещё не обновлён этим коммитом.
+- Добавлены исследование, ST_CoreVitals, BPC_SurvivalBody, WBP_VitalsHUD, WBP_SurvivalDebug, L_SurvivalCore — черновики с sources, переменными, тестами; NEEDS REVIEW, PIE NOT RUN. Codex / ue-codex.
+
 ### Changed (production: corrected F00 drafts + local setup priority, 21.11.2026)
 
 - По разрешению автора перенесены только исправленные MD-трафареты F00 и связанные документы из ue-codex@1b15f38c4978167bb6e6f8a3fd190ba6cf31100b: Float double subtype, explicit init/restore, phase enum/cache, private clock, duplicate guard, target loop, derived duration, rejection/cleanup, negative probe checks. Claude подтвердил применение десяти замечаний, полный re-review ещё ожидается; статус revised draft, не assembled/PIE tested.

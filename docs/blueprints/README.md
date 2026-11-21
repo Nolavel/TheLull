@@ -19,7 +19,7 @@
 
 `project/` — **текстовое зеркало**, не отдельная собранная игра и не директория, которую нужно скопировать в Unreal `Content`. `<ProjectRoot>` Claude определяет по фактически открытому `.uproject`. Не создавать пустые `Source`, `Plugins`, `Saved`, `Intermediate` и фиктивный `.uproject`; добавляем путь только когда для него появился реальный asset/настройка.
 
-[**Индекс сборки**](project/README.md): сначала F−1 — готовый Epic Third Person Template (Blueprint, None) и [квартал Key West](project/Content/Maps/L_KeyWestBlockout.md); 727 не главный shelter. Затем F00 Config → Enum + Struct → Interface → Clock → opt-in probe. Внутренние папки — наше соглашение, не обязательная структура UE; штатные ассеты не дублировать.
+[**Индекс сборки**](project/README.md): сначала F−1 — готовый Epic Third Person Template (Blueprint, None) и [L_SurvivalCore](project/Content/Maps/L_SurvivalCore.md); F00 Config → Enum + Struct → Interface → Clock → opt-in probe, Core → HUD → Debug. Квартал позднее, 727 не главный shelter. Внутренние папки — наше соглашение, не обязательная структура UE; штатные ассеты не дублировать.
 
 ## Атомарный build + обратная связь
 

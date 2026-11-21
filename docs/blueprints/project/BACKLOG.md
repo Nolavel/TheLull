@@ -6,6 +6,8 @@
 
 **Статус F00, 21.11.2026:** исправленный пакет из `ue-codex@1b15f38c4978167bb6e6f8a3fd190ba6cf31100b` опубликован в production как **revised draft / NEEDS RE-REVIEW**, не как готовое задание на сборку. Claude Cloud подтвердил исправление десяти замечаний, но полное повторное инженерное ревью каждого MD не завершено. Никаких UE-ассетов, Compile/PIE этим переносом не получено. Local может готовить окружение независимо; сборка конкретного трафарета — после его ревью и проверки MCP.
 
+**Уточнение автора 21.11.2026 (заменяет прежний порядок):** сначала ядро survival по The Long Dark, затем минимальный UI и Debug UI с рабочими индикаторами; география только после этого. Штатная Third Person площадка нужна для запуска, не реконструкция квартала. Key West не отменён, но не является зависимостью core. Первичные F01/F02 используют контролируемый температурный вход, полная климатическая модель позднее.
+
 ## Не выполнено / ожидает локальной проверки
 
 - **F−1-001 | NOT RUN:** подтвердить существующий Third Person Template, пакеты, camera/movement baseline в UE 5.8.4. Owner: Claude local.
@@ -14,7 +16,7 @@
 
 - **PRE-001 | OPEN — project setup:** автор 21.11.2026 подтвердил установленный UE 5.8.4; локальная инспекция не проводилась, проект ещё не создан. Claude Local создаёт Third Person Blueprint (None), проверяет `.uproject` и пакеты. Owner: Claude Local.
 - **PRE-002 | OPEN — MCP setup:** Unreal MCP ещё не настроен (сообщение автора 21.11.2026). Claude Local настраивает подключение и проверяет capability inventory **Unreal MCP** (создание Structure, Interface, Blueprint Class, заполнение graph pins/links, создание level, Compile, Save, PIE, чтение actual graphs). Owner: Claude Code (local). Если нужная операция отсутствует, записать как блокировку, а не заменять её выдуманным endpoint.
-- **F00-001 | NOT RUN:** Config + E_SimPhase + ST + BPI + BP + opt-in probe на готовом квартале собраны по MD? Нужно Compile/Save и доказательство сохранения пакетов. Owner: Claude Code (local).
+- **F00-001 | NOT RUN:** Config + E_SimPhase + ST + BPI + BP + opt-in probe на L_SurvivalCore собраны по MD? Нужно Compile/Save и доказательство сохранения пакетов. Owner: Claude Code (local).
 - **F00-002 | NOT RUN:** разбиение 3600 s vs 4×900 s, запрет двойной регистрации, отрицательного/нулевого/невалидного advance, fractional tail, duplicate clock, restore-before-init и после advance без симуляции, phase order/cache, reentry; фактические результаты PIE не получены. Owner: Claude Code (local).
 - **F00-003 | NOT RUN:** текст ↔ actual asset graph → diff по переменным, типам, пинам, owner state и API; изменение каждого спорного места через отдельное согласование. Owner: Claude Code (local).
 
@@ -27,6 +29,11 @@
 - **PRE-004 | OPEN — calibration:** после настройки проекта и MCP и pre-review выбранного MD выполнить минимальный цикл на E_SimPhase (Save/reopen/inspect); если доступны зависимости, проверить применение enum в Blueprint и PIE, иначе оставить PIE NOT RUN. 24.11.2026 — сначала setup, не обязательная сборка. Owner: Claude Local.
 - **DESIGN-001 | OPEN — hypothesis from lab:** экономика мира может определять исход сильнее выбора игрока; план на завтра может не менять вечер. Не считать установленным фактом UE. Проверять на F01–F05 причинные связи, конечные ресурсы и разные решения в одной игровой ситуации. Owner: Codex.
 
+- **CORE-001 | NEEDS REVIEW:** ST_CoreVitals + BPC_SurvivalBody, 4 потребности + Condition, один writer, clock-driven, fixture exposure.
+- **CORE-002 | NEEDS REVIEW:** WBP_VitalsHUD, реальные snapshots и тренды.
+- **CORE-003 | NEEDS REVIEW:** WBP_SurvivalDebug + L_SurvivalCore, состояние и тестовые команды, PIE pending.
+- **CORE-004 | OPEN:** реальные ресурсы/действия/thermal zones. Mock replenishment не gameplay. Географию не начинать до рабочего ядра.
+ 
 ## Шаблон каждой новой записи (пополняет Claude Local после операции MCP)
 
 ```text
