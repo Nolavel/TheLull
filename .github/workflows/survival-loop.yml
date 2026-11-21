@@ -33,6 +33,13 @@ jobs:
           print(f"Observed endings: {r['end_reasons']}")
           print(f"Evening decisions: {r['evening_choices']}")
           print(f"Mean trips: {r['mean_trips']}")
+          print("\\n### Example history, seed 1")
+          print("| Day | Returned min | Evening | Core at dawn -> next dawn | Fuel at dawn -> next dawn | Stop |")
+          print("|---|---:|---|---|---|---|")
+          for d in r["one_example"]:
+              print(f"| {d['day']} | {d['return_minute']} | {d['evening']['chose'][:1]} | "
+                    f"{d['core_at_dawn']} -> {d['core_next_dawn']} | "
+                    f"{d['fuel_at_dawn']} -> {d['fuel_next_dawn']} | {d['end_reason'] or '-'} |")
           print("Raw JSON in artifact; parameters are research placeholders, not game balance.")
           PY
       - uses: actions/upload-artifact@v4
