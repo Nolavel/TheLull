@@ -1,0 +1,54 @@
+name: causal-loop-audit
+
+on:
+  push:
+    branches: [ue-codex]
+    paths:
+      - "lab/**"
+      - ".github/workflows/causal-loop-audit.yml"
+  workflow_dispatch:
+    inputs:
+      seeds:
+        description: "Paired seeds per (variant,profile), default 30"
+        default: "30"
+
+permissions:
+  contents: read
+
+jobs:
+  test-causes:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Causal audit contracts (no expected outcome)
+        run: python3 -m unittest lab.tests.test_causal_audit -v
+      - name: Paired one-axis experiments + mechanical alternatives
+        env:
+          SEEDS: ${{ inputs.seeds || '30' }}
+        run: |
+          mkdir -p causal-results
+          python3 -m lab.causal_audit --seeds "$SEEDS" --days 7 --json causal-results/causal.json | tee causal-results/summary.txt
+          python3 - <<'PY' | tee -a "$GITHUB_STEP_SUMMARY"
+          import json
+          d=json.load(open("causal-results/causal.json",encoding="utf-8"))
+          assert d["checks"]["weather_mismatches_across_paired_cases"] == 0, "Different objective weather across paired runs"
+          assert d["checks"]["burn_constant_restored"], "Physical parameter leaked after experiment"
+          print("## Causal audit (toy model, not gameplay balance)")
+          print(f"Paired cases per arm: {d['design']['cases_per_arm']}")
+          print("| One-axis intervention | Mean run days | First morning core °C | Ending reasons | Relative to baseline days |")
+          print("|---|---:|---:|---|---|")
+          for name,row in d["arms"].items():
+              print(f"| {name} | {row['mean_completed_days']} | {row['mean_core_after_day1_c']} | {row['end_reasons']} | {row['paired_days_difference']} |")
+          c=d["counterfactual_evening"]
+          print(f"\nCandidate choices observed: {c['observed_evenings']}; occasions with higher-core alternative: {c['evenings_with_alternative_raising_core_by_half_degree']}")
+          print(f"\nWeather mismatch count: {d['checks']['weather_mismatches_across_paired_cases']}")
+          print("\n**No assumption that a preferred decision or outcome should emerge. Read raw JSON for limits.**")
+          PY
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: causal-loop-results
+          path: causal-results/
