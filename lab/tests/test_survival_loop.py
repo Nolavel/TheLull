@@ -17,8 +17,14 @@ class SurvivalLoopContract(unittest.TestCase):
                 story = run(seed=seed, variant=variant, days=4)
                 self.assertTrue(story["history"])
                 for day in story["history"]:
-                    self.assertAlmostEqual(day["minutes_accounted"], 1440.0)
-                    self.assertEqual(day["next_dawn_minute"] - day["starting_dawn_minute"], 1440)
+                    self.assertGreater(day["minutes_accounted"], 0.0)
+                    self.assertLessEqual(day["minutes_accounted"], 1440.0 + 1e-6)
+                    if day["completed_dawn"]:
+                        self.assertAlmostEqual(day["minutes_accounted"], 1440.0)
+                        self.assertEqual(day["next_dawn_minute"] - day["starting_dawn_minute"], 1440)
+                    else:
+                        self.assertIsNone(day["next_dawn_minute"])
+                        self.assertIsNotNone(day["end_reason"])
 
     def test_the_same_body_continues_across_dawn(self):
         result = run(seed=3, days=4)
@@ -71,7 +77,10 @@ class SurvivalLoopContract(unittest.TestCase):
     def test_run_reports_end_or_explicit_horizon(self):
         for seed in range(1, 6):
             story = run(seed=seed, days=7)
-            self.assertEqual(story["days_completed"], len(story["history"]))
+            self.assertEqual(story["days_completed"], sum(d["completed_dawn"] for d in story["history"]))
+            self.assertEqual(story["days_started"], len(story["history"]))
+            self.assertAlmostEqual(story["elapsed_minutes"],
+                sum(d["minutes_accounted"] for d in story["history"]), places=3)
             self.assertTrue(story["end_reason"] or story["days_completed"] == 7)
 
 
