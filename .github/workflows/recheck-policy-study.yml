@@ -1,0 +1,54 @@
+name: recheck-policy-study
+
+on:
+  push:
+    branches: [ue-codex]
+    paths:
+      - "lab/**"
+      - ".github/workflows/recheck-policy-study.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  paired-worlds:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Belief and paid-search contracts
+        run: |
+          python3 -m unittest lab.tests.test_recheck lab.tests.test_recheck_study -v
+      - name: Same weather, same finite world, old versus new belief policy
+        run: |
+          mkdir -p research-results
+          python3 -m lab.recheck_study --seeds 30 --days 7 --json research-results/recheck.json | tee research-results/summary.txt
+          python3 - <<'PY' | tee -a "$GITHUB_STEP_SUMMARY"
+          import json
+          d=json.load(open("research-results/recheck.json",encoding="utf-8"))
+          print("## Recheck-policy causal study")
+          print(f"Paired cases: {d['design']['run_count']}, 7-day horizon")
+          print("| Condition | Mean days | Mean collected | Uncollected world loot | No trip with loot remaining |")
+          print("|---|---:|---:|---:|---:|")
+          for label in ("control","recheck"):
+              r=d["aggregate"][label]
+              print(f"| {label} | {r['mean_days']} | {r['mean_fuel_found']} | {r['mean_unused_world_loot']} | {r['no_trip_last_day_despite_stock']} |")
+          print("\\nPaired differences: " + str(d["aggregate"]["paired"]))
+          print("\\n### Per-world and profile")
+          print("| World / Profile | Old days | New days | Old collected | New collected |")
+          print("|---|---:|---:|---:|---:|")
+          for group, arms in d["groups"].items():
+              old,new=arms["control"],arms["recheck"]
+              print(f"| {group} | {old['mean_days']} | {new['mean_days']} | {old['mean_fuel_found']} | {new['mean_fuel_found']} |")
+          print("\\nChecks: " + str(d["checks"]))
+          print("\\nNo outcome is required to improve. No new loot or adjusted temperature/fuel constants.")
+          assert all(value == 0 for value in d["checks"].values()), d["checks"]
+          PY
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: paid-recheck-study-results
+          path: research-results/
