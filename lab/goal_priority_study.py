@@ -233,11 +233,19 @@ def case(variant: str, initial_core: float, initial_stamina: float,
     actor=Agent("local",world)
     first=plan(actor,session,anchor)
     before_goal=anchor
+    # Crucial control: an externally imposed initial goal may already be
+    # inconsistent with current pressure. Do NOT call that a goal learned
+    # from consequences. Freeze the initial STATE-INFERRED goal here.
+    pressure_before=update_goal(session,anchor)
+    predicted_first=next(
+        (x for x in first["alternatives"] if x["option"]==first["choice"]),None
+    )
     outcome=execute(session,first["choice"],world) if first["choice"] else None
+    belief_update=""
     if outcome and outcome["elapsed_minutes"]>0:
         # Only real observed body cooling; no "recovery" from positive heat
         # mistaken for shelter cooling.
-        actor.beliefs.observe_shelter_cooling(
+        belief_update=actor.beliefs.observe_shelter_cooling(
             outcome["before"]["core"],outcome["after"]["core"],
             outcome["elapsed_minutes"]/60.0
         )
@@ -245,11 +253,32 @@ def case(variant: str, initial_core: float, initial_stamina: float,
     goal=inferred["next_goal"]
     adapted=plan(actor,session,goal) if goal else None
     frozen=plan(actor,session,before_goal) if not session.body.terminal else None
+    frozen_pressure=(
+        plan(actor,session,pressure_before["next_goal"])
+        if pressure_before["next_goal"] and not session.body.terminal else None
+    )
+    forecast_error=None
+    if outcome and predicted_first:
+        real=outcome["after"]
+        forecast_error={
+            "core":round(real["core"]-predicted_first["predicted_core"],5),
+            "stamina":round(real["stamina"]-predicted_first["predicted_stamina"],5),
+            "fuel":round(real["fuel"]-predicted_first["predicted_fuel"],5),
+            "minutes":round(outcome["elapsed_minutes"]-
+                            predicted_first["predicted_minutes"],5),
+            "work_completion_correct": (
+                predicted_first["predicted_work_done"] ==
+                (not real["work_pending"])
+            ),
+        }
     snapshot=copy.deepcopy(session)
     # The next action is genuinely executed on the exact post-action state,
     # separately for the adaptive and frozen-control policies.
     second_results={}
-    for name,dec in (("adapted",adapted),("frozen",frozen)):
+    for name,dec in (
+        ("adapted",adapted),("frozen",frozen),
+        ("pre_action_pressure_frozen",frozen_pressure),
+    ):
         other=copy.deepcopy(snapshot)
         second_results[name]=(
             execute(other,dec["choice"],world) if dec and dec["choice"] else None
@@ -264,8 +293,29 @@ def case(variant: str, initial_core: float, initial_stamina: float,
             "before":before_goal,"after":goal,
             "reason":inferred["because"],
             "changed":goal!=before_goal and goal is not None,
+            "pressure_inferred_before_action":pressure_before,
+            "pressure_truly_changed_after_action": (
+                pressure_before["next_goal"]!=goal
+            ),
         },
-        "next_intentions":{"adapted":adapted,"frozen_control":frozen},
+        "decision_chain":{
+            "assigned_goal":before_goal,
+            "initial_state_inferred_goal":pressure_before["next_goal"],
+            "cues":first["cues"],
+            "alternatives":first["alternatives"],
+            "choice":first["choice"],
+            "forecast_committed_before_action":predicted_first,
+            "observed_consequences":outcome["observed_consequences"] if outcome else None,
+            "forecast_error":forecast_error,
+            "belief_update_from_observed_cooling":belief_update,
+            "next_goal":goal,
+            "why_goal_changed":inferred["because"],
+            "next_action":adapted["choice"] if adapted else None,
+        },
+        "next_intentions":{
+            "adapted":adapted,"frozen_control":frozen,
+            "pre_action_pressure_frozen":frozen_pressure,
+        },
         "next_actual_physical_continuations":second_results,
         "state_after_first":{
             "core":session.body.core_c,"stamina":session.body.stamina,
@@ -320,12 +370,27 @@ def study()->dict:
                     checks["free_work"]+=1
                 if aft["terminal"]:
                     counts["first_action_terminal"]+=1
+            if follow["pressure_truly_changed_after_action"]:
+                counts["new_pressure_after_actual_action"]+=1
+                if len(examples)<12 and (
+                    row["next_intentions"]["pre_action_pressure_frozen"]
+                    and row["next_intentions"]["adapted"]
+                    and row["next_intentions"]["pre_action_pressure_frozen"]["choice"]
+                    !=row["next_intentions"]["adapted"]["choice"]
+                ):
+                    counts["genuine_pressure_changed_next_action"]+=0
             if follow["changed"]:
                 counts["goal_revisions"]+=1
                 counts[f"revision:{follow['before']}->{follow['after']}"]+=1
             same.append(first["choice"])
             goal_matrix[goal][first["choice"]]+=1
             nexts=row["next_intentions"]
+            if nexts["adapted"] and nexts["pre_action_pressure_frozen"]:
+                if (nexts["adapted"]["choice"] !=
+                    nexts["pre_action_pressure_frozen"]["choice"]):
+                    counts["consequence_changed_goal_and_next_action"]+=1
+                    if not follow["pressure_truly_changed_after_action"]:
+                        checks["action_changed_without_new_pressure"]+=1
             if nexts["adapted"] and nexts["frozen_control"]:
                 if nexts["adapted"]["choice"]!=nexts["frozen_control"]["choice"]:
                     counts["goal_caused_next_action_change"]+=1
@@ -367,9 +432,10 @@ def study()->dict:
         "checks":{k:checks[k] for k in (
             "chosen_unavailable","unbilled_time","created_fuel",
             "unearned_furniture","chop_not_accounted","free_work",
-            "second_action_unavailable","negative_fuel")},
+            "second_action_unavailable","negative_fuel",
+            "action_changed_without_new_pressure")},
         "limits":[
-            "Three initial goals are experimentally assigned, not autonomously discovered from player dialogue.",
+            "Three initial goals are experimentally assigned; report distinguishes disagreement with state-inferred pressure BEFORE any action from a genuinely new pressure AFTER the consequence.",
             "Goal after first action is derived from observed thermal, stamina, fuel and task deadline pressures. The priority heuristic is a hypothesis, not a learning optimizer.",
             "Same post-action Body and Room are copied only for frozen-vs-adaptive counterfactual, not given to actor as hypothetical future observations.",
             "Fuel comes from finite furniture and requires 90 minutes, axe, stamina; a walking trip in D1.7 has no fuel pickup.",
