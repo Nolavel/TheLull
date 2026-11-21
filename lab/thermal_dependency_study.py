@@ -110,18 +110,18 @@ def simulate(seed: int, variant: str, profile: str, arm: str = "baseline",
         measure("outside_trip", person, before, hours)
         return result
 
-    def traced_day(person, room, outside, hours, asleep, fatigue_per_h=0.0):
+    def traced_day(person, room, outside, hours, asleep, fatigue_per_h=0.0, **kwargs):
         before = person.core_c
         day_temp = outside + (6.0 if arm == "day_shelter_only_plus_6c" else 0.0)
         result = original_step_day(person, room, day_temp, hours, asleep,
-                                   fatigue_per_h=fatigue_per_h)
+                                   fatigue_per_h=fatigue_per_h, **kwargs)
         measure("shelter_day", person, before, hours)
         return result
 
-    def traced_night(person, room, outside, hours, asleep, fatigue_per_h=0.0):
+    def traced_night(person, room, outside, hours, asleep, fatigue_per_h=0.0, **kwargs):
         before = person.core_c
         result = original_step_night(person, room, outside, hours, asleep,
-                                     fatigue_per_h=fatigue_per_h)
+                                     fatigue_per_h=fatigue_per_h, **kwargs)
         measure("night", person, before, hours)
         return result
 
