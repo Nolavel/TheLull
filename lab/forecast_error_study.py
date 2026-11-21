@@ -187,6 +187,21 @@ def evaluate_case(seed: int, variant: str, multiplier: int,
         "training_controlled_wet":True,"eligible":True,
         "prediction":prediction,
         "observation":seen,"signed_error":signed_error,
+        "decision_chain":{
+            "intention":prior.intention,
+            "cues":prior.cues,
+            "alternatives":prior.alternatives,
+            "actor_initial_choice":prior.choice,
+            "executed_action":EXPLORE,
+            "executed_action_source":"researcher-controlled training, not actor",
+            "prediction_before":prediction,
+            "observed_after":seen,
+            "signed_error":signed_error,
+            "belief_update":error_memory,
+            "next_intention":decision_objects["error"].choice,
+            "next_reason":decision_objects["error"].reason,
+            "control_ema_choice":decision_objects["ema"].choice,
+        },
         "belief_update":{
             "edge_prior_minutes":previous_edge,
             "edge_after_minutes":ema_agent.beliefs.edge_minutes[key][
@@ -262,6 +277,14 @@ def study(seeds: int = 30) -> dict:
                             })
                     errors_by_group[variant].append(signed)
                     decisions=item["decisions"]
+                    chain=item["decision_chain"]
+                    if (chain["observed_after"]!=observation or
+                        chain["prediction_before"]!=original or
+                        chain["next_intention"]!=decisions["error"]["choice"] or
+                        not chain["belief_update"] or
+                        chain["executed_action"]!=EXPLORE or
+                        len(chain["alternatives"])!=2):
+                        checks["broken_intent_chain"]+=1
                     if any(len(decisions[p]["alternatives"]) != 2 for p in POLICIES):
                         checks["lost_options"]+=1
                     if (decisions["ema"]["choice"] not in (
@@ -344,7 +367,7 @@ def study(seeds: int = 30) -> dict:
         "checks":{name:checks[name] for name in (
             "learned_unfinished_trip","incorrect_signed_error",
             "lost_options","invalid_choice","wrong_holdout_seed",
-            "heldout_not_matched"
+            "heldout_not_matched","broken_intent_chain"
         )},
         "limits":[
             "The prior/EMA/error control choices share the same standardized starting Body/Room and weather assumption.",
