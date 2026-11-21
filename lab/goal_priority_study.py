@@ -372,13 +372,6 @@ def study()->dict:
                     counts["first_action_terminal"]+=1
             if follow["pressure_truly_changed_after_action"]:
                 counts["new_pressure_after_actual_action"]+=1
-                if len(examples)<12 and (
-                    row["next_intentions"]["pre_action_pressure_frozen"]
-                    and row["next_intentions"]["adapted"]
-                    and row["next_intentions"]["pre_action_pressure_frozen"]["choice"]
-                    !=row["next_intentions"]["adapted"]["choice"]
-                ):
-                    counts["genuine_pressure_changed_next_action"]+=0
             if follow["changed"]:
                 counts["goal_revisions"]+=1
                 counts[f"revision:{follow['before']}->{follow['after']}"]+=1
