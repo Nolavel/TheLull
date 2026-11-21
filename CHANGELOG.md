@@ -7,6 +7,10 @@
 
 ## Unreleased
 
+### Added (Hoarbound day/night equivalent in UE, 21.11.2026)
+
+- New draft stencils BP_RealtimeClockDriver (24 game seconds per real second; full 60 real-minute day, pause-aware elapsed sampling), BP_DayNightLighting (UE native DirectionalLight/SkyAtmosphere/SkyLight; Hoarbound sunrise/sunset 06/18, 4 game-minute sun step, 2 real-second visual blend). Replaced obsolete L_SurvivalCore 60 game seconds/real second fixture driver to prevent double time and accidental 24-minute day; Debug time shows Day N HH:MM and period. Source Hoarbound main and Epic UE5.8. All NEEDS CLOUD REVIEW, no uassets/MCP/PIE, no weather or moon/geo implementation. Codex / ue-codex.
+
 ### Added (production: finite paid actions before geography, 21.11.2026)
 
 - Targeted publication from ue-codex@f366963d8528cc9b797cf5ed2abdd497c2d56007: 3 new stencil targets ST_CoreSupplies, BPC_CoreActions, BP_CoreRestSpot; Body gains controlled paid recovery and paid rest mode, Core level J/K/L routes actions, Debug reads finite stock, dependency audit extended (17 active targets). Water/food starter stock is a finite fixture, not world inventory; rest 900 game seconds only inside spatial RestSpot + warm zone. Hunger/thirst continue falling; no new clock.

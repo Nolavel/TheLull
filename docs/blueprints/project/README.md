@@ -25,6 +25,7 @@ project/
     │   └── L_KeyWestBlockout.md (deferred)
     ├── Survival/
     │   ├── Environment/
+    │   │   ├── BP_DayNightLighting.md
     │   │   ├── BP_CoreExposureZone.md
     │   │   └── BP_CoreRestSpot.md
     │   ├── Actions/
@@ -34,6 +35,7 @@ project/
     │   │   ├── ST_CoreVitals.md
     │   │   └── BPC_SurvivalBody.md
     │   └── Time/
+    │       ├── BP_RealtimeClockDriver.md
     │       ├── E_SimPhase.md
     │       ├── E_AdvanceResult.md
     │       ├── ST_SimStep.md
@@ -65,6 +67,6 @@ project/
 1. **F−1**: Claude Local настраивает MCP, создаёт Third Person Blueprint project (Variant None), подтверждает .uproject / установленный UE 5.8.4 / template / реально доступные MCP operations. Перед сборкой — результат предварительного ревью Cloud по SHA трафарета.
 2. **F−1**: [L_SurvivalCore](Content/Maps/L_SurvivalCore.md), копия штатного уровня, не район.
 3. **F00**: [Config](Config/DefaultGameplayTags.ini.md) → [E_SimPhase](Content/Survival/Time/E_SimPhase.md) + [E_AdvanceResult](Content/Survival/Time/E_AdvanceResult.md) + [ST_SimStep](Content/Survival/Time/ST_SimStep.md) → [BPI_SimStepReceiver](Content/Survival/Time/BPI_SimStepReceiver.md) → [BP_SurvivalWorld](Content/Survival/Time/BP_SurvivalWorld.md) → [BP_F00ClockProbe](Content/Tests/Survival/BP_F00ClockProbe.md). Подключаем к L_SurvivalCore; probe opt-in.
-4. После каждого asset Claude Local через MCP: build → Compile/Save → inspect → PIE → actual vs stencil → [BACKLOG](BACKLOG.md) → handoff Codex. Дальше [BP_CoreExposureZone](Content/Survival/Environment/BP_CoreExposureZone.md) + [ST_CoreVitals](Content/Survival/Body/ST_CoreVitals.md) → [BPC_SurvivalBody](Content/Survival/Body/BPC_SurvivalBody.md) → [HUD](Content/UI/Survival/WBP_VitalsHUD.md) → [ST_CoreSupplies](Content/Survival/Actions/ST_CoreSupplies.md) → [Debug](Content/UI/Survival/WBP_SurvivalDebug.md) → [BP_CoreRestSpot](Content/Survival/Environment/BP_CoreRestSpot.md) → [BPC_CoreActions](Content/Survival/Actions/BPC_CoreActions.md) → integrate Paid J/K/L in Level. Create Stock struct BEFORE Debug, which already consumes it. География после рабочего ядра.
+4. После каждого asset Claude Local через MCP: build → Compile/Save → inspect → PIE → actual vs stencil → [BACKLOG](BACKLOG.md) → handoff Codex. Дальше [BP_CoreExposureZone](Content/Survival/Environment/BP_CoreExposureZone.md) + [ST_CoreVitals](Content/Survival/Body/ST_CoreVitals.md) → [BPC_SurvivalBody](Content/Survival/Body/BPC_SurvivalBody.md) → [HUD](Content/UI/Survival/WBP_VitalsHUD.md) → [ST_CoreSupplies](Content/Survival/Actions/ST_CoreSupplies.md) → [Debug](Content/UI/Survival/WBP_SurvivalDebug.md) → [BP_CoreRestSpot](Content/Survival/Environment/BP_CoreRestSpot.md) → [BPC_CoreActions](Content/Survival/Actions/BPC_CoreActions.md) → integrate Paid J/K/L in Level. Add [BP_RealtimeClockDriver](Content/Survival/Time/BP_RealtimeClockDriver.md) + [BP_DayNightLighting](Content/Survival/Environment/BP_DayNightLighting.md) after verified F00/Level; native lights come from the Third Person scene. Create Stock struct BEFORE Debug, which already consumes it. **Hoarbound timing decision (21.11):** 1800+1800 REAL seconds = 60 real-minute day, so Driver requests 24 GAME seconds per REAL second. The old Level fixture 60/second is **REPLACED**, not run in parallel. DayNight reads only BP_SurvivalWorld absolute time (sun steps 4 game min, visual ease 2 real sec), maps to UE native movable DirectionalLight/SkyAtmosphere/SkyLight. Day clock/lighting do not require geography. География после рабочего ядра.
 
 Официальная документация [UE 5.8](https://dev.epicgames.com/documentation/en-us/unreal-engine?application_version=5.8) и [Blueprint API](https://dev.epicgames.com/documentation/en-us/unreal-engine/BlueprintAPI?application_version=5.8): проверить версию в селекторе, пины и возможности в установленной 5.8.4. **Ни один из наших ассетов ещё не создан и PIE не проверялся.** F00 revised after Cloud #3; re-review pending. Новый уровень размещения, core и UI — NEEDS REVIEW; F00 graph не менялся.
