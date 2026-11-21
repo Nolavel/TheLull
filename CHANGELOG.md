@@ -7,6 +7,13 @@
 
 ## Unreleased
 
+### Decision (обязательный survival-манифест и первый редакторский маршрут, 21.11.2026)
+
+- [`docs/gameplay/SURVIVAL_MANIFEST.md`](docs/gameplay/SURVIVAL_MANIFEST.md) — четыре обязательных условия: полный loop TLD→TheLull, сопоставление TLD/жанра/Hoarbound/Key West, проверяемый Blueprint-контракт и сквозная/человеческая приёмка; закреплено в `AGENTS.md` и `CODEX.md`.
+- [`docs/blueprints/survival_f00/`](docs/blueprints/survival_f00/) — отдельные `.md` на четыре UE assets: struct шага, interface, world clock, тестовый actor; зависимости, типы, ordered graph, правила owner/save и PIE критерии. Трафареты в `ue-codex`, **`.uasset` не собраны, PIE не запускался**, `production` не трогали. Codex / `ue-codex`.
+
+## Unreleased
+
 
 ### Research (D2.0: the lost opportunity changes tomorrow's actual purpose, 21.11.2026)
 
