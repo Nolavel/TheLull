@@ -26,6 +26,9 @@ DRY_H = 1.5
 WATER_H = 1.0
 SEARCH_H = 1.0
 WET_INSULATION_LOSS_C = 5.0
+# A dry garment is the reference protection, not a survival objective.
+# Difference in cold exposure from *the same* environmental conditions.
+DRY_CORE_ADVANTAGE_C_PER_H = WET_INSULATION_LOSS_C * 0.079
 
 # The planned preparation itself differs; movement and destination do not.
 EXPLORE = "искать дрова сейчас"
@@ -99,7 +102,9 @@ def _options(stage: str, gear: Equipment, room: Room) -> list[dict]:
     tasks = [
         (EXPLORE, True, 1.0, 0.0, "добыча конечна, улица охлаждает"),
         (DRY, gear.wetness > 1e-8 and (room.fuel > 0 or room.fire_lit),
-         DRY_H, min(room.fuel, DRY_H), "сушка улучшает теплоизоляцию; нужна печь"),
+         DRY_H, min(room.fuel, DRY_H),
+         "добровольная подготовка: сухая одежда уменьшает будущую потерю тепла; "
+         "действие тратит время и дрова"),
         (WATER, gear.raw_water > 0 and (room.fuel > 0 or room.fire_lit),
          WATER_H, min(room.fuel, WATER_H), "кипячение даст подготовленную воду; нужна печь"),
         (REST, True, 0.5, 0.0, "без новой добычи или подготовки"),
@@ -125,18 +130,27 @@ def _choose(policy: str, stage: str, body: Body, room: Room,
         chosen = next(x for x in preference if x in available)
         return chosen, "предварительно зарегистрированная стратегия, не человеческий выбор"
     if policy == "agent":
-        # Explicitly tentative priorities from present, perceived state.
-        # No weather truth, hidden loot, real future or perfect utility.
-        cold_urgency = max(0.0, 36.5 - body.core_c)
+        # Drying is an optional investment, NEVER an emergency ordered merely
+        # because wetness > 0. Benefits are avoided outdoor core loss while
+        # using the same dry reference clothing; costs are fuel and time.
+        # These are rough beliefs for a planned 2-hour walk, not an oracle.
+        estimated_trip_h = 2.0 if stage == "morning" else 1.5
+        saved_core = gear.wetness * DRY_CORE_ADVANTAGE_C_PER_H * estimated_trip_h
+        scarce_fuel = 0.8 if room.fuel <= 2.0 else 0.25
+        drying_cost = DRY_H * scarce_fuel + 0.3  # hours unavailable for exploring
+        cold_urgency = max(0.0, 36.0 - body.core_c)
         scores = {
-            EXPLORE: 1.6 + (1.0 if room.fuel < 2.5 else 0.0),
-            DRY: 2.0 * gear.wetness + cold_urgency * 0.75,
-            WATER: 2.4 if agent.profile == "local" else 1.8,
-            REST: 0.25,
+            EXPLORE: 1.5 + (1.0 if room.fuel < 2.5 else 0.0),
+            DRY: saved_core + 0.5 * cold_urgency - drying_cost,
+            WATER: 1.0 if gear.raw_water > 0 else -1.0,
+            REST: 0.4 + cold_urgency,
         }
         selected = max(available, key=lambda label: (scores[label], label))
-        return selected, (f"ориентировочная оценка полезности {scores[selected]:.2f}, "
-                          f"без знания будущей погоды или скрытых запасов")
+        return selected, (
+            f"оценка ценности сухой одежды: до {saved_core:.2f}°C меньших "
+            f"потерь на будущей вылазке; цена сушки {drying_cost:.2f}; "
+            f"выбрано {selected} при ограниченных дровах"
+        )
     # Scripted comparator after return: prepare an outstanding need once.
     for label in (DRY, WATER, REST):
         if label in available:
@@ -144,14 +158,13 @@ def _choose(policy: str, stage: str, body: Body, room: Room,
     return REST, "нет доступной подготовки"
 
 
-def _intention(gear: Equipment, room: Room) -> str:
-    if gear.raw_water > 0 and gear.safe_water == 0:
-        return "подготовить питьевую воду"
-    if gear.wetness > 0.01:
-        return "просушить одежду"
+def _intention(gear: Equipment, room: Room, body: Body) -> str:
+    """An anticipated objective, not a compulsory clothing or water quest."""
+    if body.core_c < 35.5:
+        return "снизить риск охлаждения и восстановиться"
     if room.fuel < 2:
         return "найти топливо для следующего дня"
-    return "разведать ещё неизвестные места"
+    return "разведать место и выбрать, как подготовиться к следующему выходу"
 
 
 def run(seed: int, variant: str = "B_readable", profile: str = "local",
@@ -185,7 +198,7 @@ def run(seed: int, variant: str = "B_readable", profile: str = "local",
         alternatives = _options(stage, gear, room)
         chosen, reason = _choose(policy, stage, body, room, gear, agent)
         entry = Decision(time=clock(world.dawn_min + body.elapsed_minutes),
-                         point="убежище:"+stage, intention=_intention(gear, room),
+                         point="убежище:"+stage, intention=_intention(gear, room, body),
                          cues=cues, alternatives=alternatives,
                          choice=chosen, reason=reason)
         if provider is not None:
@@ -281,7 +294,7 @@ def run(seed: int, variant: str = "B_readable", profile: str = "local",
     for event in log:
         if not event.outcome:
             event.outcome = "вылазка предпринята; добыча только после возвращения"
-    next_intent = _intention(gear, room)
+    next_intent = _intention(gear, room, body)
     return {
         "case": {"seed":seed,"variant":variant,"profile":profile,
                  "wet":wet,"need_water":need_water,"policy":policy},
@@ -296,6 +309,11 @@ def run(seed: int, variant: str = "B_readable", profile: str = "local",
         "water_at_dusk": water_at_dusk,
         "raw_water_left": gear.raw_water,
         "wet_final": round(gear.wetness,4),
+        "clothing_insulation_final_c": round(gear.clothing_c,4),
+        "dry_reference_insulation_c": CLOTHING_INSULATION_C,
+        "max_avoided_core_loss_next_2h_c": round(
+            (1.0-gear.wetness)*DRY_CORE_ADVANTAGE_C_PER_H*2.0, 5
+        ),
         "safe_water_final": gear.safe_water,
         "fuel_at_dusk": round(fuel_at_dusk,4),
         "fuel_final": round(room.fuel,4),
@@ -314,6 +332,7 @@ def run(seed: int, variant: str = "B_readable", profile: str = "local",
             "Wetness is initial condition, no weather-driven soaking or layered clothing yet.",
             "Spark/ignition availability held constant, no matches inventory in this experiment.",
             "Exploration is one 60-min search of a known house, not a human-controlled map.",
+            "Dry clothing is a physical protection advantage, not an obligatory goal.",
             "Next intention is a heuristic label; there is no measured human fun.",
         ],
     }
