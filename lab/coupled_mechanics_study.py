@@ -7,10 +7,14 @@ from __future__ import annotations
 
 import argparse
 import json
+import random
 from collections import Counter, defaultdict
 from statistics import mean
 
-from .coupled_microloop import CONDITIONS, POLICIES, run
+from .body import Body
+from .coupled_microloop import CONDITIONS, POLICIES, Equipment, _advance, run
+from .evening import Room
+from .world import World
 
 VARIANTS = ("A_safe", "B_readable", "C_unreadable")
 PROFILES = ("novice", "local")
@@ -26,11 +30,58 @@ def study(seeds: int = 30) -> dict:
     grouped = defaultdict(list)
     checks = Counter()
     matched = {}
+    # Physical comparison, with ACTION and ROUTE held fixed. The ordinary
+    # agent-run 2x2 cannot isolate the effect of gear from different decisions.
+    mobility_pairs = []
 
     for variant in VARIANTS:
         for profile in PROFILES:
             for seed in range(1, seeds + 1):
                 block = {}
+                world = World.load("district_v0", variant)
+                weather = world.roll_weather(random.Random(f"{seed}:weather:1"))
+                edge = world.edge("home", "house_a")
+                clock = world.dawn_min
+                base_travel = world.travel_minutes(edge, clock, weather)
+                wind = weather.wind(clock)
+                paired = {}
+                for wet_factor in (0.0, 1.0):
+                    body, room, gear = Body(), Room(fuel=0), Equipment(wetness=wet_factor)
+                    costs = {"stamina_demand":0.0,"extra_fatigue":0.0,
+                             "walked_h":0.0,"minimum_stamina":body.stamina,
+                             "wet_pace_delay_min":0.0}
+                    expected = gear.travel_minutes(
+                        base_travel, wind=wind, exposure=edge.exposure
+                    )
+                    used = _advance(
+                        body, room, world, gear, expected, at_home=False,
+                        weather=weather, exposure=edge.exposure,
+                        travelling=True, walking_costs=costs
+                    )
+                    paired[wet_factor] = {
+                        "elapsed_min": used,
+                        "stamina": body.stamina,
+                        "fatigue": body.fatigue,
+                        "core_c": body.core_c,
+                        "movement_stability": gear.movement_stability(
+                            wind=wind, exposure=edge.exposure
+                        ),
+                        "stamina_demand": costs["stamina_demand"],
+                        "terminal": body.terminal,
+                    }
+                dry_probe, wet_probe = paired[0.0], paired[1.0]
+                mobility_pairs.append({"variant":variant, "profile":profile,
+                                       "seed":seed,"dry":dry_probe,"wet":wet_probe})
+                if dry_probe["terminal"] or wet_probe["terminal"]:
+                    checks["mobility_probe_terminal"] += 1
+                if not (
+                    dry_probe["elapsed_min"] < wet_probe["elapsed_min"]
+                    and dry_probe["stamina"] > wet_probe["stamina"]
+                    and dry_probe["fatigue"] < wet_probe["fatigue"]
+                    and dry_probe["core_c"] > wet_probe["core_c"]
+                    and dry_probe["movement_stability"] > wet_probe["movement_stability"]
+                ):
+                    checks["mobility_advantage_broken"] += 1
                 for wet, water in CONDITIONS:
                     for policy in POLICIES:
                         result = run(seed, variant, profile, wet=wet,
@@ -87,6 +138,11 @@ def study(seeds: int = 30) -> dict:
             "mean_fuel_burned":avg(r["fuel_burned"] for r in data),
             "mean_fuel_at_end":avg(r["fuel_final"] for r in data),
             "mean_wetness_at_dusk":avg(r["wet_at_dusk"] for r in data),
+            "mean_walk_stamina_demand": avg(r["walking_stamina_demand"] for r in data),
+            "mean_minimum_walk_stamina": avg(r["minimum_walking_stamina"] for r in data),
+            "mean_stamina_at_dusk": avg(r["stamina_at_dusk"] for r in data),
+            "mean_extra_walking_fatigue": avg(r["walking_extra_fatigue"] for r in data),
+            "mean_pace_delay_min": avg(r["wet_pace_delay_minutes"] for r in data),
             "water_prepared":sum(r["safe_water_final"]>0 for r in data),
             "mean_core_at_dusk":avg(r["core_at_dusk"] for r in data),
             "decisions":len(decisions),
@@ -116,7 +172,31 @@ def study(seeds: int = 30) -> dict:
                     cells[3]["mean_core_at_dusk"]-cells[2]["mean_core_at_dusk"]-
                     cells[1]["mean_core_at_dusk"]+cells[0]["mean_core_at_dusk"],4),
             }
+    physical_advantages = {}
+    for variant in VARIANTS:
+        sample = [x for x in mobility_pairs if x["variant"] == variant]
+        dry = [x["dry"] for x in sample]
+        wet = [x["wet"] for x in sample]
+        physical_advantages[variant] = {
+            "n_paired": len(sample),
+            "same_route": "home→house_a",
+            "dry_core_c": avg(x["core_c"] for x in dry),
+            "wet_core_c": avg(x["core_c"] for x in wet),
+            "dry_stamina_after_walk": avg(x["stamina"] for x in dry),
+            "wet_stamina_after_walk": avg(x["stamina"] for x in wet),
+            "dry_fatigue_after_walk": avg(x["fatigue"] for x in dry),
+            "wet_fatigue_after_walk": avg(x["fatigue"] for x in wet),
+            "dry_travel_min": avg(x["elapsed_min"] for x in dry),
+            "wet_travel_min": avg(x["elapsed_min"] for x in wet),
+            "dry_pace_stability": avg(x["movement_stability"] for x in dry),
+            "wet_pace_stability": avg(x["movement_stability"] for x in wet),
+            "stamina_saved_by_dry": avg(
+                x["wet"]["stamina_demand"] - x["dry"]["stamina_demand"]
+                for x in sample
+            ),
+        }
     return {
+        "physical_advantages_same_route": physical_advantages,
         "design": {
             "blocks":len(matched),"runs":sum(len(v) for v in grouped.values()),
             "variants":VARIANTS,"profiles":PROFILES,"seeds_per_profile":seeds,
@@ -133,7 +213,8 @@ def study(seeds: int = 30) -> dict:
             "deposited_more_than_found","negative_fuel","free_fuel",
             "water_conservation","invalid_wetness","clock_bounds",
             "terminal_clock","fabricated_dawn","invalid_choice",
-            "missing_decision_observation"
+            "missing_decision_observation","mobility_probe_terminal",
+            "mobility_advantage_broken"
         )},
         "examples":{
             f"{v}/{p}/seed1": [
@@ -151,6 +232,8 @@ def study(seeds: int = 30) -> dict:
             "The fireplace has assumed available ignition; matches are NOT yet implemented.",
             "All numerical coefficients are provisional and not calibrated.",
             "Factorial contrasts of agent behavior do not measure fun or authentic human intent.",
+            "The fixed route probes directly compare dry/wet core, stamina and travel time under identical seed/weather/actions.",
+            "Travel pace stability is a small deterministic time proxy; no animation, slips or UE controller simulated.",
             "Horizon is one dawn; successful runs are right-censored at 24h.",
         ],
     }
@@ -165,6 +248,7 @@ def main():
     with open(a.json,"w",encoding="utf-8") as f:
         json.dump(result,f,ensure_ascii=False,indent=2)
     print(json.dumps({"design":result["design"],
+                      "physical_advantages_same_route":result["physical_advantages_same_route"],
                       "interactions":result["factorial_interactions"],
                       "checks":result["checks"]},ensure_ascii=False,indent=2))
 
