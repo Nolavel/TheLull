@@ -16,7 +16,7 @@ from collections import Counter
 from dataclasses import asdict
 from statistics import mean
 
-from .agent import Agent
+from .agent import Agent, edge_key
 from .body import Body
 from .clothing_followthrough import WORK_START_STAMINA, followup_work
 from .clothing_payoff_study import (
@@ -51,9 +51,16 @@ def make_world(variant: str, multiplier: int) -> World:
 def choose_clothing(agent: Agent, body: Body, room: Room, gear: Equipment,
                     *, assume_storm: bool = False) -> Decision:
     """A decision from subjective route beliefs, not the real route or weather."""
-    estimated_one_way, route = agent.path("home", "house_a", storm=assume_storm)
-    if not route:
-        raise ValueError("unknown target — no legitimate expedition option")
+    # This study commits to the SINGLE direct edge used by the physical
+    # counterfactual. Calling Agent.path() could choose a shorter detour,
+    # whereas the physical probe still walks the stretched direct edge.
+    # That would invalidate matched decisions. Estimate only this direct
+    # edge from the actor's memories; never read World.edge.length_m.
+    direct = agent.beliefs.edge_minutes.get(edge_key("home","house_a"))
+    if direct is None:
+        raise ValueError("the direct experimental route is not known")
+    estimated_one_way = direct["storm" if assume_storm else "calm"]
+    route = ["home", "house_a"]
     hours = 2 * estimated_one_way / 60.0
     wet_stamina_h = agent.beliefs.wet_walk_stamina_per_h_est
     predicted_wet_stamina = max(0.0, body.stamina - wet_stamina_h * hours)
@@ -152,7 +159,9 @@ def analyse_case(seed: int, variant: str, multiplier: int,
     if actual["completed_return"]:
         weather = world.roll_weather(random.Random(f"{seed}:weather:1"))
         experienced_storm = weather.is_storm(world.dawn_min)
-        before_edge = agent.path("home","house_a",storm=experienced_storm)[0]
+        before_edge = agent.beliefs.edge_minutes[edge_key("home","house_a")][
+            "storm" if experienced_storm else "calm"
+        ]
         # The traveler completed this leg and knows the elapsed minutes.
         observed_leg = actual["legs"][0]["minutes_billed"]
         prediction = agent.observe_edge("home","house_a",experienced_storm,
@@ -168,7 +177,9 @@ def analyse_case(seed: int, variant: str, multiplier: int,
             "predicted_edge_minutes":round(prediction,5),
             "observed_edge_minutes":round(observed_leg,5),
             "edge_belief_now_min":round(
-                agent.path("home","house_a",storm=experienced_storm)[0],5),
+                agent.beliefs.edge_minutes[edge_key("home","house_a")][
+                    "storm" if experienced_storm else "calm"
+                ],5),
             "experienced_storm":experienced_storm,
             "basis": "first real traversed leg, not dry counterfactual",
         }
@@ -301,7 +312,7 @@ def study(seeds: int = 30) -> dict:
             "The physically continued after-trip task restores observed room heat/fire/fuel and actual garment wetness, but is a separate action-choice probe, not a 2-day playthrough.",
             "One training trip is deliberately wet; subsequent preparation remains voluntary, with no dry counterfactual disclosed to Agent.",
             "The heavy work stamina readiness threshold is a prototype task constraint, not a global mobility exhaustion penalty.",
-            "The route is artificially lengthened 1/8/24/40x only for laboratory sensitivity.",
+            "The route is artificially lengthened 1/8/24/40x only for laboratory sensitivity; the experimental route is a committed direct edge, not the shortest alternate street path.",
             "True future storm is never passed to the chooser. Last observed storm can be used as an explicit, uncertain belief.",
             "No claims about human enjoyment or autonomous fun.",
         ]
