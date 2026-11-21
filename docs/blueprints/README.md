@@ -6,6 +6,19 @@
 Зачем: облачный агент не видит `.uasset` как логику и не может открыть редактор. Описание словами
 («сделай ветвление по холоду») воспроизводится каждый раз по-разному и не проверяется. Трафарет — проверяется.
 
+## Строительный маршрут survival
+
+Обязательное основание — [манифест survival](../gameplay/SURVIVAL_MANIFEST.md) и [F00 исследование](../gameplay/reference/SURVIVAL_FOUNDATION_00_TO_UE.md). **Здесь находится библиотека трафаретов для будущей сборки в самом UE, а не ещё одна лаборатория.**
+
+Первая отдельная папка: [`survival_f00/`](survival_f00/). **В ней каждый `.md` строго описывает один UE asset** (Blueprint Class / Blueprint Interface / Blueprint Struct). Исходя из зависимостей сборка начинается так:
+
+1. [`ST_SimStep.md`](survival_f00/ST_SimStep.md) → Blueprint Struct с интервалом.
+2. [`BPI_SimStepReceiver.md`](survival_f00/BPI_SimStepReceiver.md) → Blueprint Interface шагового обновления.
+3. [`BP_SurvivalWorld.md`](survival_f00/BP_SurvivalWorld.md) → первый runtime-Actor, единственный clock.
+4. [`BP_F00ClockProbe.md`](survival_f00/BP_F00ClockProbe.md) → только тестовый actor для PIE-регрессии.
+
+После сборки каждого сверить `Package`, `ParentClass`, UE-тип каждого pin и собственника записи, затем Compile/Save. Если UE MCP или `uasset` выдал иной граф, сохранить расхождения; **не считать текст исполняемым Blueprint**. Следующая папка появляется лишь при реальном переходе к F01, без создания пустых классов впрок. Уровень `L_F00_TimeLab` (не Blueprint) создаётся по шагам из `BP_SurvivalWorld.md`.
+
 ## Как это работает
 
 ```
