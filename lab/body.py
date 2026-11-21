@@ -45,6 +45,14 @@ class Body:
     elapsed_minutes: float = 0.0
     last_step_hours: float = 0.0  # actual billed interval (may end inside a time step)
 
+    def __post_init__(self) -> None:
+        # A restored or manually created body at the floor cannot revive.
+        if self.core_c <= DEATH_C:
+            self.core_c = DEATH_C
+            self.terminal_reason = self.terminal_reason or "температурный предел"
+            if self.terminal_at_minute is None:
+                self.terminal_at_minute = self.elapsed_minutes
+
     @property
     def terminal(self) -> bool:
         return self.terminal_reason is not None
