@@ -101,7 +101,8 @@ def _predicted_trip(agent: Agent, node: str) -> float:
 
 def run_day(world: World, agent: Agent, weather: DayWeather, lrng: random.Random, day: int, fuel: int,
             signals_visible: bool = True, body: Body | None = None,
-            *, charge_legacy_night: bool = True) -> tuple[DayRecord, int]:
+            *, charge_legacy_night: bool = True,
+            stay_home_for_recovery: bool = False) -> tuple[DayRecord, int]:
     body = body if body is not None else Body()
     rec = DayRecord(day=day, fuel_morning=fuel, margin=agent.margin, signal_trust=agent.beliefs.signal_trust(),
                     storm_start=weather.storm_start, storm_end=weather.storm_end, min_core_c=body.core_c)
@@ -111,6 +112,22 @@ def run_day(world: World, agent: Agent, weather: DayWeather, lrng: random.Random
         rec.terminal_minute = world.dawn_min + body.elapsed_minutes % (24 * 60)
         rec.run_end_reason = body.terminal_reason
         return rec, fuel
+
+    if stay_home_for_recovery:
+        rec.decisions.append(Decision(
+            clock(depart), "выход", "восстановиться после плохой ночи",
+            [f"наблюдаемая температура тела {body.core_c:.2f}°C",
+             f"усталость {body.fatigue:.1f}",
+             f"имеющееся топливо {fuel:.2f}"],
+            [{"option": "остаться и восстановиться", "available": True,
+              "basis": "сохранить тепло и силы, потратить дневное время"},
+             {"option": "искать топливо", "available": True,
+              "basis": "пополнить ограниченный запас, принять риск холода"}],
+            "остаться и восстановиться",
+            "пересмотр после фактического ночного исхода; не предписанное требование"))
+        rec.decisions[-1].outcome = "выход отменён, дневное время проведено дома"
+        rec.events.append("ночной опыт изменил план: остался в убежище")
+        return _finish_day(world, rec, fuel, charge_legacy_night)
 
     if fuel >= world.fuel_per_night + 1:
         rec.decisions.append(Decision(
