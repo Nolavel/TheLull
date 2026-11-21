@@ -32,6 +32,8 @@
 - **CORE-001 | NEEDS REVIEW:** ST_CoreVitals + BPC_SurvivalBody, 4 потребности + Condition, один writer, clock-driven, fixture exposure.
 - **CORE-002 | NEEDS REVIEW:** WBP_VitalsHUD, реальные snapshots и тренды.
 - **CORE-003 | NEEDS REVIEW:** WBP_SurvivalDebug + L_SurvivalCore, состояние и тестовые команды, PIE pending.
+- **CORE-005 | NEEDS REVIEW:** BP_CoreExposureZone + body source selection; player crosses warm/cold region, signed delta reflects actual position. Debug override explicit; test sampling error later. Owner Codex + Claude Cloud.
+- **DESIGN-002 | OPEN:** official Hinterland status description includes Condition recovery when needs not critical; current draft omits passive recovery. Decide when rest/recovery mechanics added, do not claim exact TLD balance.
 - **CORE-004 | OPEN:** реальные ресурсы/действия/thermal zones. Mock replenishment не gameplay. Географию не начинать до рабочего ядра.
  
 ## Шаблон каждой новой записи (пополняет Claude Local после операции MCP)

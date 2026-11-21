@@ -23,6 +23,8 @@ project/
     │   ├── L_SurvivalCore.md
     │   └── L_KeyWestBlockout.md (deferred)
     ├── Survival/
+    │   ├── Environment/
+    │   │   └── BP_CoreExposureZone.md
     │   ├── Body/
     │   │   ├── ST_CoreVitals.md
     │   │   └── BPC_SurvivalBody.md
@@ -50,9 +52,11 @@ project/
 
 ## Порядок
 
+**Разрешение автора 21.11.2026:** Codex может целевыми коммитами публиковать подготовленные survival MD-трафареты и их документы в `production` ДО независимого ревью, с явным статусом `NEEDS REVIEW` / `NEEDS RE-REVIEW` и указанием snapshot/зависимостей. Это не разрешение на произвольный merge ветки, перенос lab/CI или изменение чужой ветки. Local не считает такие MD готовыми к сборке до Cloud review и проверки реального MCP.
+
 1. **F−1**: Claude Local настраивает MCP, создаёт Third Person Blueprint project (Variant None), подтверждает .uproject / установленный UE 5.8.4 / template / реально доступные MCP operations. Перед сборкой — результат предварительного ревью Cloud по SHA трафарета.
 2. **F−1**: [L_SurvivalCore](Content/Maps/L_SurvivalCore.md), копия штатного уровня, не район.
 3. **F00**: [Config](Config/DefaultGameplayTags.ini.md) → [E_SimPhase](Content/Survival/Time/E_SimPhase.md) + [ST_SimStep](Content/Survival/Time/ST_SimStep.md) → [BPI_SimStepReceiver](Content/Survival/Time/BPI_SimStepReceiver.md) → [BP_SurvivalWorld](Content/Survival/Time/BP_SurvivalWorld.md) → [BP_F00ClockProbe](Content/Tests/Survival/BP_F00ClockProbe.md). Подключаем к L_SurvivalCore; probe opt-in.
-4. После каждого asset Claude Local через MCP: build → Compile/Save → inspect → PIE → actual vs stencil → [BACKLOG](BACKLOG.md) → handoff Codex. Дальше [ST_CoreVitals](Content/Survival/Body/ST_CoreVitals.md) → [BPC_SurvivalBody](Content/Survival/Body/BPC_SurvivalBody.md) → [HUD](Content/UI/Survival/WBP_VitalsHUD.md) → [Debug](Content/UI/Survival/WBP_SurvivalDebug.md). География после рабочего ядра.
+4. После каждого asset Claude Local через MCP: build → Compile/Save → inspect → PIE → actual vs stencil → [BACKLOG](BACKLOG.md) → handoff Codex. Дальше [BP_CoreExposureZone](Content/Survival/Environment/BP_CoreExposureZone.md) + [ST_CoreVitals](Content/Survival/Body/ST_CoreVitals.md) → [BPC_SurvivalBody](Content/Survival/Body/BPC_SurvivalBody.md) → [HUD](Content/UI/Survival/WBP_VitalsHUD.md) → [Debug](Content/UI/Survival/WBP_SurvivalDebug.md). География после рабочего ядра.
 
 Официальная документация [UE 5.8](https://dev.epicgames.com/documentation/en-us/unreal-engine?application_version=5.8) и [Blueprint API](https://dev.epicgames.com/documentation/en-us/unreal-engine/BlueprintAPI?application_version=5.8): проверить версию в селекторе, пины и возможности в установленной 5.8.4. **Ни один из наших ассетов ещё не создан и PIE не проверялся.** F00 revised after Cloud #3; re-review pending. Новый уровень размещения, core и UI — NEEDS REVIEW; F00 graph не менялся.

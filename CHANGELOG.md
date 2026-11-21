@@ -7,6 +7,10 @@
 
 ## Unreleased
 
+### Added (spatial core exposure draft, 21.11.2026)
+
+- Автор разрешил публиковать MD до независимого ревью с NEEDS REVIEW; не переносить lab/CI. Добавлен BP_CoreExposureZone, тело получает input от реальной позиции Pawn при clock step, Debug явно показывает/сбрасывает override; обновлены snapshot, map, acceptance. Это ранний тест среды, не погода/печь. Source review Epic 5.8 и Hinterland, UE/PIE ещё не проверены. Codex / ue-codex.
+
 ### Decision / Added (Core before geography, 21.11.2026)
 
 - Новая поправка автора: TLD core → minimal HUD → Debug UI → география позже. Манифест, роли, индекс и размещение F00 исправлены в ue-codex, логика F00 не изменена. Production ещё не обновлён этим коммитом.
