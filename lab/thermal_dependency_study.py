@@ -84,19 +84,17 @@ def simulate(seed: int, variant: str, profile: str, arm: str = "baseline",
         if not record or person is not tracker["body"]:
             return
         delta = person.core_c - old_core
-        tracker["elapsed_day_h"] += hours
+        tracker["elapsed_day_h"] += person.last_step_hours
         if old_core > physiology.DEATH_C + 1e-7 and person.core_c <= physiology.DEATH_C + 1e-7:
             tracker["ever_hit_temperature_floor"] = True
             if tracker["first_floor_phase"] is None:
                 tracker["first_floor_phase"] = phase
-                tracker["first_floor_absolute_h"] = (
-                    (tracker["day_counter"] - 1) * 24.0 + tracker["elapsed_day_h"]
-                )
+                tracker["first_floor_absolute_h"] = person.terminal_at_minute / 60.0
         elif (tracker["ever_hit_temperature_floor"] and
               old_core <= physiology.DEATH_C + 1e-7 and delta > 1e-8):
             tracker["post_floor_rewarming_steps"] += 1
         metric = segments[phase]
-        metric["h"] += hours
+        metric["h"] += person.last_step_hours
         if delta < 0:
             metric["lost_c"] -= delta
         else:
@@ -104,7 +102,7 @@ def simulate(seed: int, variant: str, profile: str, arm: str = "baseline",
         # Temperature is capped at a floor in this toy model; do not
         # interpret the flat trace as genuine thermal stability.
         if old_core <= physiology.DEATH_C + 1e-7:
-            metric["at_temperature_floor_h"] += hours
+            metric["at_temperature_floor_h"] += person.last_step_hours
 
     def traced_trip(person, felt_c, hours, *args, **kwargs):
         before = person.core_c
@@ -380,11 +378,13 @@ def analyze(seeds: int = 30, days: int = HORIZON) -> dict:
                     len(available), 4
                 ) if available else 0,
                 "first_evening_with_any_viable_forecast": round(
-                    sum(x["evening_options"][0]["forecast_viable"] >= 1 for x in group) /
+                    sum(x["evening_options"][0]["forecast_viable"] >= 1
+                        for x in group if x["evening_options"]) /
                     len(group), 4
                 ),
                 "first_evening_with_multiple_viable_forecasts": round(
-                    sum(x["evening_options"][0]["forecast_viable"] >= 2 for x in group) /
+                    sum(x["evening_options"][0]["forecast_viable"] >= 2
+                        for x in group if x["evening_options"]) /
                     len(group), 4
                 ),
                 "end_reasons": dict(sorted(endings.items())),
