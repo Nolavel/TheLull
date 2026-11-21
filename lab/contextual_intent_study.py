@@ -239,10 +239,14 @@ def run_case(seed: int,variant: str,profile: str,multiplier: int,
     # see researcher counterfactual dry outcomes.
     traces=[]
     for step,state in enumerate(states):
-        weather=weather_for(world,state,seed)
+        # The *same* sequence has different witnessed storm onset/duration
+        # across episodes. Repetition means evidence from multiple events,
+        # not replaying an identical storm three times.
+        episode_seed=seed+step*101
+        weather=weather_for(world,state,episode_seed)
         # Controlled training; the underlying physics seed is paired
         # and constant across all learning strategies.
-        physics=evaluate(seed+step*101,variant,multiplier,
+        physics=evaluate(episode_seed,variant,multiplier,
                          weather_override=weather)
         wet=physics["arms"]["wet_now"]
         history={"episode":step+1,"weather_condition_assigned":state,
