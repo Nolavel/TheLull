@@ -211,6 +211,18 @@ def analyze(seeds: int = 30, days: int = HORIZON) -> dict:
                     "mean_first_morning_core_c": round(statistics.mean(
                         r["history"][0]["core_next_dawn"] for r in subset
                     ), 3),
+                    "mean_trips": round(statistics.mean(
+                        sum(bool(day["day_trip"]["went_out"]) for day in r["history"])
+                        for r in subset
+                    ), 3),
+                    "mean_carried": round(statistics.mean(
+                        sum(day["carried"] for day in r["history"])
+                        for r in subset
+                    ), 3),
+                    "mean_evenings_without_fuel": round(statistics.mean(
+                        sum(day["fuel_at_dawn"] <= 0 for day in r["history"])
+                        for r in subset
+                    ), 3),
                 }
     profile_pairs = {}
     for variant in VARIANTS:
@@ -222,6 +234,24 @@ def analyze(seeds: int = 30, days: int = HORIZON) -> dict:
                 "novice_longer" if novice > local else "same_horizon"
             )] += 1
         profile_pairs[variant] = dict(sorted(outcomes.items()))
+
+    # Concrete side-by-side examples aid code diagnosis; these are not
+    # cherry-picked as best examples, always the first registered seed.
+    profile_examples = {}
+    for variant in VARIANTS:
+        profile_examples[variant] = {}
+        for profile in PROFILES:
+            run = results[(variant, profile, 1)]["baseline"]
+            profile_examples[variant][profile] = [{
+                "day": d["day"], "target": d["day_trip"]["target"],
+                "carried": d["carried"], "return_minute": d["return_minute"],
+                "evening": d["evening"]["chose"][0],
+                "fuel_at_dawn": d["fuel_at_dawn"],
+                "fuel_next_dawn": d["fuel_next_dawn"],
+                "core_next_dawn": d["core_next_dawn"],
+                "fatigue_next_dawn": d["fatigue_next_dawn"],
+                "end_reason": d["end_reason"],
+            } for d in run["history"]]
 
     traces = []
     # Observe real alternatives from a copy of an *unchanged* evening state.
@@ -259,6 +289,7 @@ def analyze(seeds: int = 30, days: int = HORIZON) -> dict:
         "arms": per_arm,
         "by_variant_and_profile": strata,
         "same_seed_profile_comparison": profile_pairs,
+        "seed1_profile_examples": profile_examples,
         "counterfactual_evening": {
             "observed_evenings": len(traces),
             "chosen": dict(sorted(by_action.items())),
@@ -299,6 +330,7 @@ def main() -> None:
               f"endings={row['end_reasons']}, changes={row['paired_days_difference']}")
     print("Baseline by variant/profile:", result["by_variant_and_profile"])
     print("Paired novice versus local:", result["same_seed_profile_comparison"])
+    print("Seed 1 side-by-side profiles:", result["seed1_profile_examples"])
     print("Paired weather mismatches:", result["checks"]["weather_mismatches_across_paired_cases"])
     print("True alternative actions:", {
         k: v for k, v in result["counterfactual_evening"].items()
