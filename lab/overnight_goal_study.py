@@ -92,9 +92,26 @@ def audit_history(story: dict) -> dict:
                 preview["goal"]!=current["goal"]
             ):
                 errs["next_dawn_choice_not_carried"]+=1
+            if (story["goal_policy"]=="adaptive"
+                and previous_cont["physical_night_changed_pressure"]):
+                counts["physical_night_pressure_carried_into_real_next_day"]+=1
+                no_night=previous_cont["next_dawn_time_only_control_preview"]
+                if (preview and current and no_night and
+                    current["choice"]!=no_night["choice"]):
+                    counts["actual_next_day_action_changed_due_physical_night"]+=1
+                    if current["choice"]==FORAGE:
+                        counts["next_day_changed_to_forage"]+=1
+                    if current["choice"]==RECOVER:
+                        counts["next_day_changed_to_recover"]+=1
+                    if current["choice"]==FINISH:
+                        counts["next_day_changed_to_work"]+=1
             if day["gear_wetness_at_next_dawn"]!=prev["gear_wetness_at_next_dawn"]:
                 errs["gear_reset"]+=1
             counts["real_second_dawns"]+=1
+        if day["day_trip"]["went_out"]:
+            counts["actual_outings"]+=1
+            if day["fuel_delivered"]==0:
+                counts["outings_returned_empty_or_terminal"]+=1
         if cont["work_action"]:
             event=cont["work_action"]
             if event["completed"] and day["pending_work_at_next_dawn"]:
