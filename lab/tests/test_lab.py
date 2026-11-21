@@ -83,8 +83,17 @@ class PairedConditionsTest(unittest.TestCase):
         for seed in range(1, 11):
             on = run("district_v0", "B_readable", "local", 8, seed, signals_visible=True)
             off = run("district_v0", "B_readable", "local", 8, seed, signals_visible=False)
-            self.assertEqual([(r.storm_start, r.storm_end) for r in on],
-                             [(r.storm_start, r.storm_end) for r in off])
+            # The two runs can end on different days. Compare the common
+            # weather prefix, not their lengths (which are gameplay outcomes).
+            shared = min(len(on), len(off))
+            self.assertEqual([(r.storm_start, r.storm_end) for r in on[:shared]],
+                             [(r.storm_start, r.storm_end) for r in off[:shared]])
+            import random
+            world = World.load("district_v0", "B_readable")
+            for d in on + off:
+                expected = world.roll_weather(random.Random(f"{seed}:weather:{d.day}"))
+                self.assertEqual((d.storm_start, d.storm_end),
+                                 (expected.storm_start, expected.storm_end))
 
     def test_hidden_signals_produce_no_signal_decisions(self):
         for seed in range(1, 6):
