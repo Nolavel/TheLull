@@ -7,6 +7,12 @@
 
 ## Unreleased
 
+### Changed (production: corrected F00 drafts + local setup priority, 21.11.2026)
+
+- По разрешению автора перенесены только исправленные MD-трафареты F00 и связанные документы из ue-codex@1b15f38c4978167bb6e6f8a3fd190ba6cf31100b: Float double subtype, explicit init/restore, phase enum/cache, private clock, duplicate guard, target loop, derived duration, rejection/cleanup, negative probe checks. Claude подтвердил применение десяти замечаний, полный re-review ещё ожидается; статус revised draft, не assembled/PIE tested.
+- Манифест дополнен тремя критериями stencil: логическая корректность, реализуемость в Blueprint, воспроизводимость другим агентом. Во вторник 24.11 приоритет Local — создание проекта и MCP/preflight, минимальная калибровка только если готова среда и reviewed stencil. Утверждённый scope квартала не уменьшен. Вопросы lab сохранены в backlog. Python/CI/чужие ветки не переносились. Codex / production.
+
+
 ### Clarification (production: Cloud pre-review / Local setup, 21.11.2026)
 
 - Утверждено автором: UE 5.8.4 установлен, MCP не настроен, UE-проект не создан; настройку MCP и создание Third Person Blueprint проекта выполняет Claude Local. Инспекция редактора ещё не проведена.

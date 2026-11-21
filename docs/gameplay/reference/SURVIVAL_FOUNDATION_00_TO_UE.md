@@ -55,12 +55,12 @@ ENVIRONMENT <--> SHELTER / HEAT / WATER / FOOD
 
 | Предлагаемый Blueprint / Struct | Состояние или API (тип) | Владелец записи; кто читает |
 |---|---|---|
-| `BP_SurvivalWorld` (Actor) | `WorldTimeSeconds: Double`; `AdvanceGameTime(DeltaGameSeconds: Double, Reason: GameplayTag)`; `GetWorldTime` | **Единственный писатель clock**. Все действия вызывают API; UI/свет читают |
-| `ST_SimStep` (Blueprint Struct) | `StartSeconds: Double`, `EndSeconds: Double`, `DeltaSeconds: Double`, `Reason: GameplayTag` | Создаёт мировой clock; systems consume |
+| `BP_SurvivalWorld` (Actor) | `WorldTimeSeconds: Float (double precision)`; `AdvanceGameTime(DeltaGameSeconds: Float (double precision), Reason: GameplayTag)`; `GetWorldTime` | **Единственный писатель clock**. Все действия вызывают API; UI/свет читают |
+| `ST_SimStep` (Blueprint Struct) | `StartSeconds: Float (double precision)`, `EndSeconds: Float (double precision)`, `Reason: GameplayTag` | Создаёт мировой clock; receiver derives duration End−Start |
 | `BPC_Climate` (ActorComponent на world actor) | `AirTemperatureC: Float`, `WindSpeedMps: Float`, `WindDirection: Vector`, `WeatherState: GameplayTag` | Climate writes; room/route/body read. Погода **не знает** намерение игрока |
 | `BPC_RoomThermal` (ActorComponent на actor комнаты выбранного shelter) | `ZoneId: Name`, `TemperatureC: Float`, `WindExposure01: Float`, `SealedFraction01: Float`, `HeatInput` (поток, пока без предрешённых единиц), `StoredHeat` (внутренняя модель) | Room writes; body и визуализация read. **Тёплая комната**, а не булевое `bIsIndoorSafe` |
 | `BPC_SurvivalBody` (ActorComponent на Henry) | `CoreTemperatureC: Float`, `Calories: Float`, `Hydration: Float`, `Fatigue01: Float`, `Condition01: Float` | Body writes. Подсистемы условий воздействуют через единый update; HUD read-only. Конкретная шкала и пороги — **не баланс из Python** |
-| `ST_ActionRequest` (Blueprint Struct) | `ActionId: GameplayTag`, `Target: Actor Reference`, `DurationGameSeconds: Double`, `bInterruptible: Boolean` | Вызывает player/action; не содержит «добычу дров» как жёсткое свойство |
+| `ST_ActionRequest` (Blueprint Struct) | `ActionId: GameplayTag`, `Target: Actor Reference`, `DurationGameSeconds: Float (double precision)`, `bInterruptible: Boolean` | Вызывает player/action; не содержит «добычу дров» как жёсткое свойство |
 | `BPC_TimeActionRunner` (ActorComponent) | `CanStartAction`, `StartAction`, `StopAction`, `OnActionCompleted/Cancelled` | **Единственный инициатор оплаты длительных действий через World**. Gameplay target owner выдаёт/списывает ресурс строго один раз |
 | `SG_TheLull` (SaveGame Blueprint) | `WorldTimeSeconds` + `BodyState` + `RoomStates` + `ItemInstances` | Снимает snapshots авторитетных владельцев; никогда не «восстанавливает» симуляцию повторным расходом времени |
 
@@ -145,3 +145,6 @@ PLAYER presses Interact on selected shelter window
 - [Epic, UE 5.8 SaveGame API](https://dev.epicgames.com/documentation/unreal-engine/API/Runtime/Engine/USaveGame?application_version=5.8)
 - [TLD→TheLull research protocol](TRANSLATION_TO_THELULL.md)
 - [TheLull survival manifesto](../SURVIVAL_MANIFEST.md)
+
+
+**F00 revision 21.11.2026:** canonical contracts in [mirror](../../blueprints/project/README.md) supersede earlier examples above (explicit init/restore, E_SimPhase cache, only Start/End in Step, Float double precision). Cloud re-review pending.

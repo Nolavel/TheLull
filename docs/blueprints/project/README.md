@@ -10,6 +10,8 @@ UE 5.8.4 → Games → Third Person → Blueprint → Variant None. [Epic docs �
 
 Автор подтвердил 21.11.2026: **UE 5.8.4 уже установлен локально; Unreal MCP ещё не настроен, UE-проект ещё не создан.** Это сообщение автора, не результат инспекции редактора. Codex готовит трафареты, Claude Cloud заранее перепроверяет их (SHA, конкретные замечания, исправления, непроверяемое локально); Codex исправляет, Local настраивает MCP, создаёт проект и забирает согласованные трафареты для сборки и backlog. Позднее Cloud может отдельно ревьюить полученные результаты. [Роли](../../../CLAUDE.md).
 
+**Статус F00, 21.11.2026:** исправленный пакет из `ue-codex@1b15f38c4978167bb6e6f8a3fd190ba6cf31100b` опубликован в production как **revised draft / NEEDS RE-REVIEW**, не как готовое задание на сборку. Claude Cloud подтвердил исправление десяти замечаний, но полное повторное инженерное ревью каждого MD не завершено. Никаких UE-ассетов, Compile/PIE этим переносом не получено. Local может готовить окружение независимо; сборка конкретного трафарета — после его ревью и проверки MCP.
+
 ## Наши первые дополнения
 
 ```text
@@ -21,6 +23,7 @@ project/
     │   └── L_KeyWestBlockout.md
     ├── Survival/
     │   └── Time/
+    │       ├── E_SimPhase.md
     │       ├── ST_SimStep.md
     │       ├── BPI_SimStepReceiver.md
     │       └── BP_SurvivalWorld.md
@@ -31,11 +34,17 @@ project/
 
 Пример: `project/Content/Maps/L_KeyWestBlockout.md` → `<ProjectRoot>/Content/Maps/L_KeyWestBlockout.umap` → `/Game/Maps/L_KeyWestBlockout`. Другие расширения .uasset и .ini соответственно. README/BACKLOG — служебные документы, не UE assets. Source/Plugins/Saved/Intermediate не создаём впрок. Любое изменение пути при обнаружении реального template согласуется, не плодит дублей.
 
+## Ближайшая локальная сессия (вторник, 24.11.2026)
+
+Приоритет автора — настройка, не обещание готовой механики. Claude Local: создать Third Person Blueprint (None) проект, проверить UE 5.8.4 и реальные MCP capabilities; открыть штатный уровень, выполнить базовый PIE, записать доступные операции и блокировки. Если останутся время и подходящий проверенный stencil, выполнить один малый полный цикл: `E_SimPhase` — создание/Save/reopen + сверка значений (сам Enum не имеет PIE), затем при доступности зависимостей минимальное использование в BP/PIE. Не считать сохранение Enum доказательством поведения clock. Допустимо закончить сессию на настройке среды. После этого начать F−1 с проходимого отрезка улицы и двух входов; это этап проверки камеры/масштаба, **не сокращение утверждённого квартала**.
+
+До локального запуска: Codex может готовить исходную геометрию F−1 и исследовать связи F01/F02, не меняя проверяемый snapshot F00 без конкретной причины. Первичный выход на F01 — связь наружной температуры/ветра, укрытия и конечного тепла, а не новая абстрактная симуляция. Открытые результаты lab сохраняются как вопросы дизайна, не как установленный баланс.
+
 ## Порядок
 
 1. **F−1**: Claude Local настраивает MCP, создаёт Third Person Blueprint project (Variant None), подтверждает .uproject / установленный UE 5.8.4 / template / реально доступные MCP operations. Перед сборкой — результат предварительного ревью Cloud по SHA трафарета.
 2. **F−1**: [L_KeyWestBlockout](Content/Maps/L_KeyWestBlockout.md), улицы, несколько укрытий, 727 не главный shelter. Проверка географии PR #340, камеры и перемещения в PIE.
-3. **F00**: [Config](Config/DefaultGameplayTags.ini.md) → [ST_SimStep](Content/Survival/Time/ST_SimStep.md) → [BPI_SimStepReceiver](Content/Survival/Time/BPI_SimStepReceiver.md) → [BP_SurvivalWorld](Content/Survival/Time/BP_SurvivalWorld.md) → [BP_F00ClockProbe](Content/Tests/Survival/BP_F00ClockProbe.md). Подключаем к той же карте; probe opt-in. Пустая TimeLab не нужна.
+3. **F00**: [Config](Config/DefaultGameplayTags.ini.md) → [E_SimPhase](Content/Survival/Time/E_SimPhase.md) + [ST_SimStep](Content/Survival/Time/ST_SimStep.md) → [BPI_SimStepReceiver](Content/Survival/Time/BPI_SimStepReceiver.md) → [BP_SurvivalWorld](Content/Survival/Time/BP_SurvivalWorld.md) → [BP_F00ClockProbe](Content/Tests/Survival/BP_F00ClockProbe.md). Подключаем к той же карте; probe opt-in. Пустая TimeLab не нужна.
 4. После каждого asset Claude Local через MCP: build → Compile/Save → inspect → PIE → actual vs stencil → [BACKLOG](BACKLOG.md) → handoff Codex. Дальше F01 и последующие связи на этой карте.
 
-Официальная документация [UE 5.8](https://dev.epicgames.com/documentation/en-us/unreal-engine?application_version=5.8) и [Blueprint API](https://dev.epicgames.com/documentation/en-us/unreal-engine/BlueprintAPI?application_version=5.8): проверить версию в селекторе, пины и возможности в установленной 5.8.4. **Ни один из наших ассетов ещё не создан и PIE не проверялся.**
+Официальная документация [UE 5.8](https://dev.epicgames.com/documentation/en-us/unreal-engine?application_version=5.8) и [Blueprint API](https://dev.epicgames.com/documentation/en-us/unreal-engine/BlueprintAPI?application_version=5.8): проверить версию в селекторе, пины и возможности в установленной 5.8.4. **Ни один из наших ассетов ещё не создан и PIE не проверялся.** F00 revised after Cloud #3; re-review pending. Map, enum, struct, interface, clock and probe must be reviewed as one dependency set.

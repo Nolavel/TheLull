@@ -19,7 +19,7 @@
 
 `project/` — **текстовое зеркало**, не отдельная собранная игра и не директория, которую нужно скопировать в Unreal `Content`. `<ProjectRoot>` Claude определяет по фактически открытому `.uproject`. Не создавать пустые `Source`, `Plugins`, `Saved`, `Intermediate` и фиктивный `.uproject`; добавляем путь только когда для него появился реальный asset/настройка.
 
-[**Индекс сборки**](project/README.md): сначала F−1 — готовый Epic Third Person Template (Blueprint, None) и [квартал Key West](project/Content/Maps/L_KeyWestBlockout.md); 727 не главный shelter. Затем F00 Config → Struct → Interface → Clock → opt-in probe. Внутренние папки — наше соглашение, не обязательная структура UE; штатные ассеты не дублировать.
+[**Индекс сборки**](project/README.md): сначала F−1 — готовый Epic Third Person Template (Blueprint, None) и [квартал Key West](project/Content/Maps/L_KeyWestBlockout.md); 727 не главный shelter. Затем F00 Config → Enum + Struct → Interface → Clock → opt-in probe. Внутренние папки — наше соглашение, не обязательная структура UE; штатные ассеты не дублировать.
 
 ## Атомарный build + обратная связь
 
@@ -53,7 +53,7 @@ Claude Cloud прежде всего проводит инженерное ре�
 
 ## Формат
 
-Для **Blueprint Class** использовать совместимый с `rust-uasset` синтаксис графа, но это **схема для воспроизведения через MCP**, а не сериализованный `.uasset`. Для Struct/Interface/Level/Config указывать целевой тип, точный путь и атомарный контракт без выдуманного Event Graph. У Class обязательны `Package`, `ParentClass`, `Variables`, функции/пины и `Event graph`.
+Для **Blueprint Class** использовать совместимый с `rust-uasset` синтаксис графа, но это **схема для воспроизведения через MCP**, а не сериализованный `.uasset`. Для Enum/Struct/Interface/Level/Config указывать целевой тип, точный путь и атомарный контракт без выдуманного Event Graph. У Class обязательны `Package`, `ParentClass`, `Variables`, функции/пины и `Event graph`.
 
 - **Variables** — `имя: тип = значение [флаги]`.
 - **Components** — дерево компонентов с отступами; `(нет)`, если их нет.
