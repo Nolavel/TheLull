@@ -314,6 +314,10 @@ def run(seed: int, days: int = 3, *, variant: str = "B_readable",
                     world, agent, weather, loot_rng, day, fuel_at_departure,
                     body=body, charge_legacy_night=False,
                     stay_home_for_recovery=shelter_recovery,
+                    stockpile_if_goal=bool(
+                        goal_policy is not None and dawn_goal_choice
+                        and dawn_goal_choice["choice"]==FORAGE
+                    ),
                 )
                 if shelter_recovery and goal_policy is not None:
                     d=day_record.decisions[0]
