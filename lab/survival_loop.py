@@ -9,6 +9,7 @@ from __future__ import annotations
 import argparse
 import json
 import random
+from typing import Callable
 from collections import Counter
 from dataclasses import asdict
 from statistics import mean
@@ -17,6 +18,7 @@ from .agent import Agent
 from .body import DEATH_C, Body
 from .evening import Room, Tomorrow, UNDECIDED, choose, step_body
 from .evening_run import play
+from .heat_choice import LIGHT, DecisionProvider, make_heat_decision
 from .sim import DEPART_AFTER_DAWN_MIN, DayRecord, clock, run_day
 from .world import DAY_MINUTES, World
 
@@ -37,19 +39,27 @@ def _light_fire(room: Room, body: Body, events: list[dict], reason: str) -> bool
 
 def _shelter_wait(room: Room, body: Body, outside_c: float, minutes: float,
                   *, heating_policy: str = "dusk",
-                  ignition_events: list[dict] | None = None) -> float:
+                  ignition_events: list[dict] | None = None,
+                  before_tick: Callable[[], None] | None = None,
+                  after_tick: Callable[[float, float, float, bool], None] | None = None) -> float:
     """Only actually elapsed minutes are billed, including partial terminal ticks."""
     if minutes < -1e-8:
         raise ValueError("time cannot move backwards")
     left = max(0.0, minutes / 60.0)
     used = 0.0
     while left > 1e-9 and not body.terminal:
+        if before_tick is not None:
+            before_tick()
         if (heating_policy == "cold_trigger_36c" and body.core_c <= 36.0
                 and ignition_events is not None):
             _light_fire(room, body, ignition_events, "observed_core_at_or_below_36c")
         step = min(STEP_H, left)
+        core_before = body.core_c
+        burning_before = room.fire_lit and room.fuel > 0
         room.step(step)
         actual = step_body(body, room, outside_c, step, asleep=False, fatigue_per_h=2.0)
+        if after_tick is not None and actual > 0:
+            after_tick(core_before, body.core_c, actual, burning_before)
         if actual <= 0:
             break
         used += actual
@@ -60,14 +70,17 @@ def _shelter_wait(room: Room, body: Body, outside_c: float, minutes: float,
 def run(seed: int, days: int = 3, *, variant: str = "B_readable",
         profile: str = "local", intentions: list[Tomorrow] | None = None,
         initial_furniture: int = 2, recheck_policy: bool = True,
-        heating_policy: str = "dusk") -> dict:
+        heating_policy: str = "dusk",
+        decision_provider: DecisionProvider | None = None) -> dict:
     """Advance one shared state. Partial days are NOT credited as dawns."""
     if days < 1:
         raise ValueError("days must be positive")
     if initial_furniture < 0:
         raise ValueError("furniture must be non-negative")
-    if heating_policy not in HEATING_POLICIES:
+    if heating_policy not in (*HEATING_POLICIES, "agent"):
         raise ValueError(f"unknown heating policy: {heating_policy}")
+    if decision_provider is not None and heating_policy != "agent":
+        raise ValueError("human decisions are only accepted in heating_policy=agent")
     world = World.load("district_v0", variant)
     agent = Agent(profile, world, allow_rechecks=recheck_policy)
     body = Body()
@@ -84,6 +97,8 @@ def run(seed: int, days: int = 3, *, variant: str = "B_readable",
         core_at_dawn = body.core_c
         fatigue_at_dawn = body.fatigue
         furniture_at_dawn = room.furniture
+        fuel_burned_at_dawn = room.burned_fuel_total
+        fire_hours_at_dawn = room.fire_hours_total
         day_record = DayRecord(day=day, fuel_morning=room.fuel)
         plan = intentions[(day - 1) % len(intentions)] if intentions else UNDECIDED
         revised = plan
@@ -100,11 +115,80 @@ def run(seed: int, days: int = 3, *, variant: str = "B_readable",
         packed_before_departure = body.packed
         phase = "morning_shelter"
         ignitions: list[dict] = []
+        stove_decisions = []
+        pending = None
+        last_prompt_at = None
+        last_prompt_core = None
+
+        def settle_previous() -> None:
+            nonlocal pending
+            if pending is None:
+                return
+            d, when, before_burn, before_fire_hours, before_core = pending
+            d.outcome = (
+                f"наблюдение через {(body.elapsed_minutes - when) / 60.0:.2f} ч: "
+                f"тело {before_core:.2f}→{body.core_c:.2f}°C; "
+                f"печь сожгла {room.burned_fuel_total - before_burn:.3f} топлива "
+                f"за {room.fire_hours_total - before_fire_hours:.3f} ч; "
+                f"дров осталось {room.fuel:.3f}"
+            )
+            pending = None
+
+        def decide_stove(point: str, window_h: float,
+                         away_h: float = 0.0) -> bool:
+            nonlocal pending, last_prompt_at, last_prompt_core
+            if body.terminal or room.fire_lit or room.fuel <= 0:
+                return False
+            settle_previous()
+            d = make_heat_decision(
+                body, room, agent.beliefs, plan, room.felt_c(world.air_temp_c),
+                point, window_h, away_h=away_h, dawn_min=world.dawn_min,
+                provider=decision_provider,
+            )
+            stove_decisions.append(d)
+            last_prompt_at = body.elapsed_minutes
+            last_prompt_core = body.core_c
+            pending = (d, body.elapsed_minutes, room.burned_fuel_total,
+                       room.fire_hours_total, body.core_c)
+            if d.choice == LIGHT:
+                return _light_fire(room, body, ignitions, f"choice:{point}")
+            return False
+
+        def poll_stove() -> None:
+            if last_prompt_at is None or last_prompt_core is None:
+                return
+            delta_m = body.elapsed_minutes - last_prompt_at
+            # A meaningful second observation, not a 15-minute prompt flood.
+            if (delta_m >= 90.0 or
+                (delta_m >= 30.0 and last_prompt_core - body.core_c >= 0.65)):
+                decide_stove("повторная оценка в убежище", 1.0)
+
+        def observe_thermal(before: float, after: float, used_h: float,
+                            burning: bool) -> None:
+            if not burning and not room.fire_lit:
+                lesson = agent.beliefs.observe_shelter_cooling(
+                    before, after, used_h
+                )
+                if lesson and stove_decisions:
+                    stove_decisions[-1].belief_update = lesson
+
+        if heating_policy == "agent":
+            # Real initial point: the current fire/fuel/body and the known
+            # departure plan; not future weather or unknown house inventory.
+            estimated_trip = agent.rank_targets()
+            likely_away = (
+                (2 * estimated_trip[0]["minutes"] + 30) / 60.0
+                if estimated_trip else 0.0
+            )
+            decide_stove("утро", (departure - world.dawn_min) / 60.0,
+                         away_h=likely_away)
         if heating_policy == "at_dawn":
             _light_fire(room, body, ignitions, "first_light")
         _shelter_wait(
             room, body, world.air_temp_c, departure - world.dawn_min,
-            heating_policy=heating_policy, ignition_events=ignitions
+            heating_policy=heating_policy, ignition_events=ignitions,
+            before_tick=poll_stove if heating_policy == "agent" else None,
+            after_tick=observe_thermal if heating_policy == "agent" else None,
         )
         fuel_at_departure = room.fuel
 
@@ -134,10 +218,14 @@ def run(seed: int, days: int = 3, *, variant: str = "B_readable",
             phase = "day_shelter"
             if heating_policy == "on_return":
                 _light_fire(room, body, ignitions, "returned_or_stayed_home")
+            elif heating_policy == "agent":
+                decide_stove("возвращение в убежище", 1.0)
             evening_start = max(float(world.day_length), return_minute)
             _shelter_wait(
                 room, body, world.air_temp_c, evening_start - return_minute,
-                heating_policy=heating_policy, ignition_events=ignitions
+                heating_policy=heating_policy, ignition_events=ignitions,
+                before_tick=poll_stove if heating_policy == "agent" else None,
+                after_tick=observe_thermal if heating_policy == "agent" else None,
             )
 
         if not body.terminal:
@@ -153,9 +241,16 @@ def run(seed: int, days: int = 3, *, variant: str = "B_readable",
                     daylight_hours=world.daylight_hours,
                     night_hours=actual_night_h
                 )
+                if heating_policy == "agent":
+                    decide_stove("вечер перед работой", 1.5)
                 night = play(
                     proposed["option"], world.air_temp_c, room, body,
-                    agent.beliefs, hours_of_night=actual_night_h
+                    agent.beliefs, hours_of_night=actual_night_h,
+                    automatic_ignition=heating_policy != "agent",
+                    on_fire_opportunity=(
+                        (lambda point, hours: decide_stove(point, min(hours, 2.0)))
+                        if heating_policy == "agent" else None
+                    ),
                 )
                 if not body.terminal:
                     if night["observed_burn_rate"] is not None:
@@ -167,6 +262,7 @@ def run(seed: int, days: int = 3, *, variant: str = "B_readable",
                             night["burn_rate_lower_bound"]
                         )
 
+        settle_previous()
         elapsed_today = body.elapsed_minutes - start_elapsed
         if body.terminal:
             end_reason = body.terminal_reason
@@ -204,6 +300,13 @@ def run(seed: int, days: int = 3, *, variant: str = "B_readable",
             "night_hours": round(actual_night_h, 6),
             "fuel_at_dawn": round(fuel_at_dawn, 3),
             "fuel_at_departure": round(fuel_at_departure, 3),
+            "stove_decisions": [asdict(d) for d in stove_decisions],
+            "fuel_burned_today": round(
+                room.burned_fuel_total - fuel_burned_at_dawn, 5
+            ),
+            "fire_hours_today": round(
+                room.fire_hours_total - fire_hours_at_dawn, 5
+            ),
             "heating_policy": heating_policy,
             "early_ignitions": ignitions,
             "fuel_delivered": day_record.carried if return_minute is not None
@@ -266,6 +369,11 @@ def run(seed: int, days: int = 3, *, variant: str = "B_readable",
         "terminal_at_minute": body.terminal_at_minute,
         "recheck_policy": recheck_policy,
         "heating_policy": heating_policy,
+        "decision_source": (
+            "human" if decision_provider is not None
+            else "agent" if heating_policy == "agent"
+            else "scripted_baseline"
+        ),
         "end_reason": end_reason, "history": history,
         "limits": [
             "Partial days are counted in elapsed_minutes, NOT days_completed.",
