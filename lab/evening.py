@@ -78,6 +78,9 @@ class Room:
         return outside_c + PASSIVE_OFFSET_C + self.heated_offset_c + source
 
     def step(self, hours: float) -> None:
+        # Paired step_body may rewind the final fraction when the single
+        # Body reaches its stopping boundary inside this time interval.
+        self._pre_step = (self.fuel, self.heated_offset_c, self.fire_lit)
         if self.fire_lit and self.fuel > 0:
             burned_h = min(hours, self.fuel / FUEL_BURN_PER_H)
             self.fuel = max(0.0, self.fuel - FUEL_BURN_PER_H * burned_h)
@@ -93,10 +96,42 @@ class Room:
 
 
 def step_body(body: Body, room: Room, outside_c: float, hours: float, asleep: bool,
-              fatigue_per_h: float = 0.0) -> None:
-    """One thermal and fatigue integrator for both the street and the room."""
-    step_core(body, room.felt_c(outside_c), hours)
-    step_fatigue(body, hours, asleep=asleep, per_hour=fatigue_per_h)
+              fatigue_per_h: float = 0.0) -> float:
+    """Advance body and room on one clock; refund unspent fuel at terminal crossing.
+
+    Call after room.step(hours). The room snapshot allows a partial final tick;
+    no fictitious rest, fire burn or extra minutes are billed after the stop.
+    """
+    previous = getattr(room, "_pre_step", None)
+    if body.terminal:
+        if previous is not None:
+            room.fuel, room.heated_offset_c, room.fire_lit = previous
+        return 0.0
+    used = hours
+    if previous is not None and body.hours_until_terminal(room.felt_c(outside_c), hours) < hours - 1e-9:
+        # The heat of a room can change during the step. Solve the first
+        # crossing using the same end-of-step felt-temperature approximation.
+        lo, hi = 0.0, hours
+        for _ in range(35):
+            mid = (lo + hi) / 2.0
+            shadow = replace(room, fuel=previous[0],
+                             heated_offset_c=previous[1], fire_lit=previous[2])
+            shadow.step(mid)
+            if body.hours_until_terminal(shadow.felt_c(outside_c), mid) < mid - 1e-12:
+                hi = mid
+            else:
+                lo = mid
+        used = hi
+        room.fuel, room.heated_offset_c, room.fire_lit = previous
+        room.step(used)
+    step_core(body, room.felt_c(outside_c), used)
+    billed = body.last_step_hours
+    if billed < used - 1e-8:
+        # Numerical boundary: refund the last microscopic partial interval.
+        room.fuel, room.heated_offset_c, room.fire_lit = previous
+        room.step(billed)
+    step_fatigue(body, billed, asleep=asleep, per_hour=fatigue_per_h)
+    return billed
 
 
 def sleep_refusal(room: Room, body: Body, outside_c: float) -> str | None:
