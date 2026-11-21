@@ -37,14 +37,14 @@ def _shelter_wait(room: Room, body: Body, outside_c: float, minutes: float) -> N
 
 def run(seed: int, days: int = 3, *, variant: str = "B_readable",
         profile: str = "local", intentions: list[Tomorrow] | None = None,
-        initial_furniture: int = 2) -> dict:
+        initial_furniture: int = 2, recheck_policy: bool = True) -> dict:
     """Advance from one dawn to the next, preserving actual resources and memories."""
     if days < 1:
         raise ValueError("days must be positive")
     if initial_furniture < 0:
         raise ValueError("furniture must be non-negative")
     world = World.load("district_v0", variant)
-    agent = Agent(profile, world)
+    agent = Agent(profile, world, allow_rechecks=recheck_policy)
     body = Body()
     room = Room(fuel=world.start_fuel, furniture=initial_furniture)
     loot_rng = random.Random(f"{seed}:loot")
@@ -144,6 +144,9 @@ def run(seed: int, days: int = 3, *, variant: str = "B_readable",
             "day_trip": {"went_out": day_record.went_out,
                          "target": day_record.target,
                          "carried": day_record.carried,
+                         "search_minutes": day_record.search_minutes,
+                         "recheck_searches": day_record.recheck_searches,
+                         "empty_searches": day_record.empty_searches,
                          "events": day_record.events,
                          "decisions": [asdict(d) for d in day_record.decisions]},
             "evening": {"intention": plan.name, "revision": revised.name,
@@ -156,6 +159,8 @@ def run(seed: int, days: int = 3, *, variant: str = "B_readable",
                 "cooling_rate_est": round(agent.beliefs.cooling_rate_est, 4),
                 "burn_rate_est": round(agent.beliefs.burn_rate_est, 4),
                 "known_locations": sorted(agent.beliefs.loot),
+                "estimated_loot": dict(sorted(agent.beliefs.loot.items())),
+                "confirmed_empty": sorted(agent.beliefs.confirmed_empty),
             },
             "remaining_loot": dict(sorted(world.loot.items())),
             "end_reason": end_reason,
@@ -165,6 +170,7 @@ def run(seed: int, days: int = 3, *, variant: str = "B_readable",
 
     return {"seed": seed, "variant": variant, "profile": profile,
             "days_requested": days, "days_completed": len(history),
+            "recheck_policy": recheck_policy,
             "end_reason": end_reason, "history": history,
             "limits": ["Daytime choices still optimize fuel, not water/food.",
                        "A fixed dawn+dusk schedule, no interpolated weather across midnight.",
