@@ -70,6 +70,9 @@ class Room:
     furniture: int = 2  # pieces left that could still be broken up for fuel
     has_axe: bool = True  # chopping is not available without the tool
     sealed: bool = False  # insulation is a persistent one-time repair
+    # Cumulative resource meters are diagnostic observations, not extra fuel.
+    burned_fuel_total: float = 0.0
+    fire_hours_total: float = 0.0
 
     def felt_c(self, outside_c: float) -> float:
         # Indoors the wind-chill term is gone entirely (Hoarbound §4). What is left: the structure's passive
@@ -80,10 +83,14 @@ class Room:
     def step(self, hours: float) -> None:
         # Paired step_body may rewind the final fraction when the single
         # Body reaches its stopping boundary inside this time interval.
-        self._pre_step = (self.fuel, self.heated_offset_c, self.fire_lit)
+        self._pre_step = (self.fuel, self.heated_offset_c, self.fire_lit,
+                          self.burned_fuel_total, self.fire_hours_total)
         if self.fire_lit and self.fuel > 0:
             burned_h = min(hours, self.fuel / FUEL_BURN_PER_H)
-            self.fuel = max(0.0, self.fuel - FUEL_BURN_PER_H * burned_h)
+            spent = FUEL_BURN_PER_H * burned_h
+            self.fuel = max(0.0, self.fuel - spent)
+            self.burned_fuel_total += spent
+            self.fire_hours_total += burned_h
             self.heated_offset_c = min(MAX_HEATED_OFFSET_C, self.heated_offset_c + HEATING_RATE_C_PER_H * burned_h)
             if self.fuel <= 0:
                 self.fire_lit = False
@@ -105,7 +112,8 @@ def step_body(body: Body, room: Room, outside_c: float, hours: float, asleep: bo
     previous = getattr(room, "_pre_step", None)
     if body.terminal:
         if previous is not None:
-            room.fuel, room.heated_offset_c, room.fire_lit = previous
+            (room.fuel, room.heated_offset_c, room.fire_lit,
+             room.burned_fuel_total, room.fire_hours_total) = previous
         return 0.0
     used = hours
     if previous is not None and body.hours_until_terminal(room.felt_c(outside_c), hours) < hours - 1e-9:
@@ -115,7 +123,8 @@ def step_body(body: Body, room: Room, outside_c: float, hours: float, asleep: bo
         for _ in range(35):
             mid = (lo + hi) / 2.0
             shadow = replace(room, fuel=previous[0],
-                             heated_offset_c=previous[1], fire_lit=previous[2])
+                             heated_offset_c=previous[1], fire_lit=previous[2],
+                             burned_fuel_total=previous[3], fire_hours_total=previous[4])
             shadow.step(mid)
             if body.hours_until_terminal(shadow.felt_c(outside_c), mid) < mid - 1e-12:
                 hi = mid
