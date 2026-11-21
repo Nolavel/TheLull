@@ -29,7 +29,7 @@ class ThermalDependencyStudyContract(unittest.TestCase):
             if trace["first_floor_absolute_h"] is not None:
                 self.assertGreaterEqual(trace["first_floor_absolute_h"], 0)
                 self.assertLessEqual(trace["first_floor_absolute_h"],
-                                     trace["days"] * 24.0 + 1e-4)
+                                     trace["elapsed_minutes"] / 60.0 + 1e-4)
             self.assertTrue(all(trace["thermal_phases"][p]["h"] >= 0
                                 for p in PHASES))
             self.assertLessEqual(len(trace["evening_options"]), trace["nights"])
