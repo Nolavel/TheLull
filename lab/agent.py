@@ -38,6 +38,8 @@ PROFILES = {
 CARRY_CAPACITY = 4
 SEARCH_CHUNK_MIN = 30
 EMA = 0.5
+# Low-valued, uncertain *revisit* only; never a guessed count of real stock.
+RECHECK_EXPECTED_LOOT = 0.75
 
 
 def edge_key(a: str, b: str) -> tuple[str, str]:
@@ -48,6 +50,8 @@ def edge_key(a: str, b: str) -> tuple[str, str]:
 class Beliefs:
     edge_minutes: dict[tuple[str, str], dict[str, float]] = field(default_factory=dict)
     loot: dict[str, float] = field(default_factory=dict)
+    # This is observation, not a deduction from an exhausted prior.
+    confirmed_empty: set[str] = field(default_factory=set)
     signal_hits: float = 1.0
     signal_misses: float = 1.0
     knows_storms_pass: bool = False
@@ -87,8 +91,10 @@ class Beliefs:
 
 
 class Agent:
-    def __init__(self, profile: str, world: World):
+    def __init__(self, profile: str, world: World, *, allow_rechecks: bool = True):
         p = PROFILES[profile]
+        # Explicit control arm for paired experiments; the canonical loop opts in.
+        self.allow_rechecks = allow_rechecks
         self.profile = profile
         self.margin = float(p["margin_min"])
         self.base_margin = float(p["margin_min"])
@@ -176,17 +182,27 @@ class Agent:
                     heapq.heappush(queue, (cost + w, nxt, route + [nxt]))
         return float("inf"), []
 
+    def can_recheck(self, node: str) -> bool:
+        """An estimate of zero is not a confirmed observation of emptiness."""
+        return (self.allow_rechecks and node in self.visited
+                and node in self.beliefs.loot
+                and self.beliefs.loot[node] <= 0
+                and node not in self.beliefs.confirmed_empty)
+
     def rank_targets(self) -> list[dict]:
-        """Buildings the player believes still hold loot, best value first."""
+        """Rank likely loot first; offer costly, uncertain rechecks only if unconfirmed."""
         ranked = []
         for node, loot in self.beliefs.loot.items():
-            if loot <= 0:
+            recheck = self.can_recheck(node)
+            if loot <= 0 and not recheck:
                 continue
             minutes, route = self.path("home", node)
             if not route:
                 continue
-            score = min(loot, CARRY_CAPACITY) / (2 * minutes + SEARCH_CHUNK_MIN)
-            ranked.append({"node": node, "minutes": minutes, "loot": loot, "score": score})
+            expected = RECHECK_EXPECTED_LOOT if recheck else min(loot, CARRY_CAPACITY)
+            score = expected / (2 * minutes + SEARCH_CHUNK_MIN)
+            ranked.append({"node": node, "minutes": minutes, "loot": loot,
+                           "recheck": recheck, "score": score})
         return sorted(ranked, key=lambda r: -r["score"])
 
     def choose_target(self) -> str | None:
@@ -194,11 +210,22 @@ class Agent:
         return ranked[0]["node"] if ranked else None
 
     def learn_loot(self, node: str, found: int) -> str:
-        """The player only knows what it found: no access to the building's true stock."""
+        """Only actual searched results update knowledge, never the world's inventory."""
+        if found < 0:
+            raise ValueError("loot found cannot be negative")
         before = self.beliefs.loot.get(node, 0.0)
         after = 0.0 if found == 0 else max(0.0, before - found)
         self.beliefs.loot[node] = after
-        return f"оценка запасов {node}: {before:.0f}→{after:.0f}"
+        if found == 0:
+            # In this toy world's search model, a complete 30-minute search
+            # finds at least one item whenever any stock is available.
+            # If search ever becomes probabilistic, this must change to
+            # "empty in this searched area", not an entire-building truth.
+            self.beliefs.confirmed_empty.add(node)
+            return f"обыск {node}: ничего не найдено, пустота подтверждена наблюдением"
+        self.beliefs.confirmed_empty.discard(node)
+        return (f"оценка запасов {node}: {before:.0f}→{after:.0f}; "
+                + ("возможно, здесь осталось ещё" if after <= 0 else "запасы ещё ожидаются"))
 
     def update_margin(self, scare: bool, on_time: bool) -> str:
         if scare:
