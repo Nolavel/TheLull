@@ -1,0 +1,53 @@
+name: thermal-dependency-study
+
+on:
+  push:
+    branches: [ue-codex]
+    paths:
+      - "lab/**"
+      - ".github/workflows/thermal-dependency-study.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  paired-thermal-study:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Test ledger, patch isolation and canonical baseline
+        run: python3 -m unittest lab.tests.test_thermal_dependency_study -v
+      - name: Pair 180 seed/profile/world cases for all physical conditions
+        run: |
+          mkdir -p thermal-results
+          python3 -m lab.thermal_dependency_study --seeds 30 --days 7 --json thermal-results/dependency.json > thermal-results/stdout.txt
+          python3 - <<'PY' | tee -a "$GITHUB_STEP_SUMMARY"
+          import json
+          r=json.load(open("thermal-results/dependency.json",encoding="utf-8"))
+          print("## Thermal dependencies — independent of gameplay tuning")
+          print(f"Cases per intervention: {r['design']['cases_per_arm']}; 7-day horizon.")
+          print("| World | Intervention | Mean completed days | First night core °C | Fire hours | Any forecast viable | Longer/same/shorter |")
+          print("|---|---|---:|---:|---:|---:|---|")
+          for variant, arms in r["by_variant"].items():
+              for arm, x in arms.items():
+                  ch=x["vs_baseline_count"]
+                  print(f"| {variant} | {arm} | {x['mean_days']} | {x['mean_first_morning_core_c']} | {x['mean_night_fire_h']} | {x['fraction_evenings_with_any_viable_option']} | {ch} |")
+          print("\\n### Baseline thermal ledger by phase (per completed run)")
+          print("| World | Phase | Mean hours | Core loss °C | Core gain °C | Hours pinned to temperature floor |")
+          print("|---|---|---:|---:|---:|---:|")
+          for variant, arms in r["by_variant"].items():
+              for name,p in arms["baseline"]["phases"].items():
+                  print(f"| {variant} | {name} | {p['mean_hours']} | {p['mean_core_loss_c']} | {p['mean_core_gain_c']} | {p['mean_floor_hours']} |")
+          print("\\nChecks: ",r["checks"])
+          print("No expected success or preferred strategy is hardcoded.")
+          assert not any(r["checks"].values()),r["checks"]
+          PY
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: thermal-dependency-json
+          path: thermal-results/
