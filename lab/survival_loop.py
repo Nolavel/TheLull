@@ -21,15 +21,32 @@ from .sim import DEPART_AFTER_DAWN_MIN, DayRecord, clock, run_day
 from .world import DAY_MINUTES, World
 
 STEP_H = 0.25
+HEATING_POLICIES = ("dusk", "at_dawn", "on_return", "cold_trigger_36c")
 
 
-def _shelter_wait(room: Room, body: Body, outside_c: float, minutes: float) -> float:
+def _light_fire(room: Room, body: Body, events: list[dict], reason: str) -> bool:
+    """A decision can use only the current room fuel and observable body state."""
+    if body.terminal or room.fire_lit or room.fuel <= 0:
+        return False
+    room.fire_lit = True
+    events.append({"elapsed_minute": round(body.elapsed_minutes, 4),
+                   "reason": reason, "fuel_at_ignition": round(room.fuel, 3),
+                   "core_at_ignition_c": round(body.core_c, 4)})
+    return True
+
+
+def _shelter_wait(room: Room, body: Body, outside_c: float, minutes: float,
+                  *, heating_policy: str = "dusk",
+                  ignition_events: list[dict] | None = None) -> float:
     """Only actually elapsed minutes are billed, including partial terminal ticks."""
     if minutes < -1e-8:
         raise ValueError("time cannot move backwards")
     left = max(0.0, minutes / 60.0)
     used = 0.0
     while left > 1e-9 and not body.terminal:
+        if (heating_policy == "cold_trigger_36c" and body.core_c <= 36.0
+                and ignition_events is not None):
+            _light_fire(room, body, ignition_events, "observed_core_at_or_below_36c")
         step = min(STEP_H, left)
         room.step(step)
         actual = step_body(body, room, outside_c, step, asleep=False, fatigue_per_h=2.0)
@@ -42,12 +59,15 @@ def _shelter_wait(room: Room, body: Body, outside_c: float, minutes: float) -> f
 
 def run(seed: int, days: int = 3, *, variant: str = "B_readable",
         profile: str = "local", intentions: list[Tomorrow] | None = None,
-        initial_furniture: int = 2, recheck_policy: bool = True) -> dict:
+        initial_furniture: int = 2, recheck_policy: bool = True,
+        heating_policy: str = "dusk") -> dict:
     """Advance one shared state. Partial days are NOT credited as dawns."""
     if days < 1:
         raise ValueError("days must be positive")
     if initial_furniture < 0:
         raise ValueError("furniture must be non-negative")
+    if heating_policy not in HEATING_POLICIES:
+        raise ValueError(f"unknown heating policy: {heating_policy}")
     world = World.load("district_v0", variant)
     agent = Agent(profile, world, allow_rechecks=recheck_policy)
     body = Body()
@@ -79,8 +99,13 @@ def run(seed: int, days: int = 3, *, variant: str = "B_readable",
         actual_night_h = 0.0
         packed_before_departure = body.packed
         phase = "morning_shelter"
-
-        _shelter_wait(room, body, world.air_temp_c, departure - world.dawn_min)
+        ignitions: list[dict] = []
+        if heating_policy == "at_dawn":
+            _light_fire(room, body, ignitions, "first_light")
+        _shelter_wait(
+            room, body, world.air_temp_c, departure - world.dawn_min,
+            heating_policy=heating_policy, ignition_events=ignitions
+        )
         fuel_at_departure = room.fuel
 
         if not body.terminal:
@@ -107,8 +132,13 @@ def run(seed: int, days: int = 3, *, variant: str = "B_readable",
                 return_minute = float(departure)
 
             phase = "day_shelter"
+            if heating_policy == "on_return":
+                _light_fire(room, body, ignitions, "returned_or_stayed_home")
             evening_start = max(float(world.day_length), return_minute)
-            _shelter_wait(room, body, world.air_temp_c, evening_start - return_minute)
+            _shelter_wait(
+                room, body, world.air_temp_c, evening_start - return_minute,
+                heating_policy=heating_policy, ignition_events=ignitions
+            )
 
         if not body.terminal:
             actual_night_h = (
@@ -174,6 +204,10 @@ def run(seed: int, days: int = 3, *, variant: str = "B_readable",
             "night_hours": round(actual_night_h, 6),
             "fuel_at_dawn": round(fuel_at_dawn, 3),
             "fuel_at_departure": round(fuel_at_departure, 3),
+            "heating_policy": heating_policy,
+            "early_ignitions": ignitions,
+            "fuel_delivered": day_record.carried if return_minute is not None
+                and day_record.went_out else 0,
             "carried": day_record.carried,
             "fuel_next_dawn": round(room.fuel, 3),
             "furniture_at_dawn": furniture_at_dawn,
@@ -231,10 +265,12 @@ def run(seed: int, days: int = 3, *, variant: str = "B_readable",
         "elapsed_days": round(body.elapsed_minutes / DAY_MINUTES, 6),
         "terminal_at_minute": body.terminal_at_minute,
         "recheck_policy": recheck_policy,
+        "heating_policy": heating_policy,
         "end_reason": end_reason, "history": history,
         "limits": [
             "Partial days are counted in elapsed_minutes, NOT days_completed.",
             "The terminal threshold is a game-model stop, not a physiological prediction.",
+            "Heat policies are controlled counterfactuals, not a validated agent choice.",
             "Daytime choices still optimize fuel, not water/food.",
             "A fixed dawn+dusk schedule, no interpolated weather across midnight.",
             "No resource respawn or balance calibration.",
