@@ -1,0 +1,57 @@
+name: contextual-intent-causal-attribution
+
+on:
+  push:
+    branches: [ue-codex]
+    paths:
+      - "lab/**"
+      - ".github/workflows/contextual-intent-causal-attribution.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  repeated-weather-learning:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Verify weather-context memory, signed counterexamples and real wait cost
+        run: python3 -m unittest lab.tests.test_contextual_intent -v
+      - name: Paired 3-episode context vs naive surprise and wait
+        run: |
+          mkdir -p results
+          python3 -m lab.contextual_intent_study --seeds 12 --json results/contextual-intent.json | tee results/summary.json
+          python3 - <<'PY' | tee -a "$GITHUB_STEP_SUMMARY"
+          import json
+          r=json.load(open("results/contextual-intent.json",encoding="utf-8"))
+          print("## D1.7 — What caused the surprise? Context vs persistent route risk")
+          print("Trip sequences are controlled, not fully lived 3 days. No human participants.")
+          print(f"{r['design']['cases']} matched sequence cases, {r['design']['training_per_case']} training trips each.")
+          print("### Global observables")
+          for key,value in sorted(r["counts"].items()):
+              print(f"- {key}: {value}")
+          print("\\n### Attribution by observed weather pattern")
+          print("| Past observed sequence → next visible cue | Naive dry | Context dry | Context wait | Plans changed |")
+          print("|---|---:|---:|---:|---:|")
+          for pattern,d in r["by_pattern"].items():
+              print(f"| {pattern} | {d.get('naive_dry',0)} | {d.get('contextual_dry',0)} | {d.get('informed_wait',0)} | {d.get('context_vs_last_changes',0)} |")
+          print("\\n### Physical next-trip outcome on identical unseen future")
+          print("| Policy | Cases | Dry | Wait | Returns | Completed later work | Mean fuel | Mean time h |")
+          print("|---|---:|---:|---:|---:|---:|---:|---:|")
+          for mode,d in r["policy_outcomes"].items():
+              print(f"| {mode} | {d['trials']} | {d['dry']} | {d['wait']} | {d['returns']} | {d['work_completed']} | {d['mean_fuel']} | {d['mean_route_plus_preparation_h']} |")
+          print("\\n### Divergent examples (NOT optimized)")
+          for ex in r["changed_choices"][:6]:
+              print(f"- {ex['case']}: {ex['legacy']} → {ex['contextual']}; evidence={ex['assessment']}")
+          print("\\nChecks:",r["checks"])
+          assert all(v == 0 for v in r["checks"].values()),r["checks"]
+          PY
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: contextual-intent-weather-causal-json
+          path: results/
