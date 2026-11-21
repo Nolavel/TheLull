@@ -30,7 +30,7 @@ Codex — **геймдизайнер-практик, независимый кр
 
 ## F−1 — игровая основа
 
-Следовать [манифесту](docs/gameplay/SURVIVAL_MANIFEST.md) и [L_KeyWestBlockout](docs/blueprints/project/Content/Maps/L_KeyWestBlockout.md). Сначала Epic Third Person Template с готовыми camera/character/input, затем квартал вокруг 727 по Hoarbound PR #340. 727 не главный shelter, вышка и АЗС требуют проверки идентификации. После playable PIE baseline подключать F00 clock. Штатные assets не дублировать, структуру сверять с открытым проектом.
+Следовать [манифесту](docs/gameplay/SURVIVAL_MANIFEST.md). F−1 Third Person → F00 единый clock → Core F01/F02 (четыре потребности, Condition, контролируемое тепло/холод) → минимальный HUD → Debug UI → конечные ресурсы, действия и связанный loop → Key West blockout. Первый level — [L_SurvivalCore](docs/blueprints/project/Content/Maps/L_SurvivalCore.md) на основе штатной карты, география отложена. Штатные assets не дублировать; реальные пути сверить в UE.
 
 ## Границы с Claude
 

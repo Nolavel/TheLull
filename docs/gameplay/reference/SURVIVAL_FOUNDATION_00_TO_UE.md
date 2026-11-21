@@ -3,7 +3,7 @@
 **21.11.2026. Статус: исследовательская исходная карта, не утверждение новых механик, не баланс, не работающий Blueprint.**  
 Ветка: `ue-codex`; `production` не изменять. Прежде чем придумывать очередную D-серию, исследовать источник → проверить существующий опыт Hoarbound → вывести TheLull/Key West-специфику → сформулировать исполнимый контракт UE → проверить один реальный игровой выбор.
 
-**Актуальное решение автора 21.11.2026:** сначала Epic Third Person Template + [квартал Key West](../../blueprints/project/Content/Maps/L_KeyWestBlockout.md) с несколькими укрытиями; 727 не главный shelter. Затем F00 clock, opt-in probe, остальные связи по [манифесту](../SURVIVAL_MANIFEST.md). UE assets ещё не собраны.
+**Актуальное решение автора 21.11.2026:** F−1 Third Person → F00 единый clock → Core F01/F02 (четыре потребности, Condition, контролируемое тепло/холод) → минимальный HUD → Debug UI → конечные ресурсы, действия и связанный loop → Key West blockout. [Core](CORE_BODY_UI_TO_UE.md). UE assets ещё не собраны.
 
 ## 0. Не начинаем с агента и не начинаем с одежды
 
@@ -45,7 +45,7 @@ ENVIRONMENT <--> SHELTER / HEAT / WATER / FOOD
 
 ## 2. Порядок строительства всей survival-грамматики
 
-`F−1 / Third Person + Key West blockout` → `F00 / Time + state` → `F01 / Climate and shelter` → `F02 / Body (cold, fatigue, hunger, thirst, condition)` → `F03 / Resources and equipment` → `F04 / Actions with time, interruption and consequences` → `F05 / Day-exit-return-night` → `F06 / Player discovery and feedback`.
+F−1 Third Person → F00 единый clock → Core F01/F02 (четыре потребности, Condition, контролируемое тепло/холод) → минимальный HUD → Debug UI → конечные ресурсы, действия и связанный loop → Key West blockout.
 
 Первые пять — **зависимости реализации**; их не нужно растягивать на 5 отдельных новых симуляционных лабораторий. Изучаем известные образцы, потом собираем UE-проверку. Каждая новая переменная должна иметь **собственника, источник изменения, потребителя, save-contract и проверяемую альтернативу**.
 

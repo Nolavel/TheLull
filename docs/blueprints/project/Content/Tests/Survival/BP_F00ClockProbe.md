@@ -8,7 +8,7 @@ Mirror: `docs/blueprints/project/Content/Tests/Survival/BP_F00ClockProbe.md` →
 ParentClass: Actor
 Implements: BPI_SimStepReceiver
 DependsOn: ST_SimStep, E_SimPhase, BPI_SimStepReceiver, BP_SurvivalWorld, Gameplay Tags
-PlacedIn: L_KeyWestBlockout (one instance, bRunProbe=false normally).
+PlacedIn: L_SurvivalCore (one instance, bRunProbe=false normally).
 ## Variables
 | Name | UE type | Default |
 |---|---|---|
@@ -138,3 +138,5 @@ For local variables inside Event Graph use private temporary members (ActiveCoun
 - [Epic Blueprint Variables, served as 5.9](https://dev.epicgames.com/documentation/en-us/unreal-engine/blueprint-variables-in-unreal-engine): Float type and Private property; exact 5.8.4 editor labels and MCP pin encoding still require local inspection.
 - [Epic UE 5.8 Enum authoring](https://dev.epicgames.com/documentation/unreal-engine/designer-02-create-a-key-in-unreal-engine).
 - [Epic UE 5.8 Get All Actors Of Class](https://dev.epicgames.com/documentation/unreal-engine/BlueprintAPI/Actor/GetAllActorsOfClass), [Is Gameplay Tag Valid](https://dev.epicgames.com/documentation/unreal-engine/BlueprintAPI/GameplayTags/IsGameplayTagValid).
+
+Поправка авторского порядка: изменён уровень размещения; F00 graph без изменений. Re-review остаётся открытым.

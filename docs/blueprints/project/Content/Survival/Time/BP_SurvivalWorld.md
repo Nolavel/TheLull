@@ -7,7 +7,7 @@ Mirror: `docs/blueprints/project/Content/Survival/Time/BP_SurvivalWorld.md` → 
 
 ParentClass: Actor
 DependsOn: ST_SimStep, E_SimPhase, BPI_SimStepReceiver, Gameplay Tags settings
-PlacedIn: /Game/Maps/L_KeyWestBlockout (1 instance, persistent level, no runtime spawn in F00).
+PlacedIn: /Game/Maps/L_SurvivalCore (1 instance, persistent level, no runtime spawn in F00).
 
 ## Создание
 Собрать зависимости сначала. Blueprint Class → Actor. Start with Tick Enabled=false; нет Event Tick. Разместить один экземпляр в persistent level. Все clock writers ниже — **функции**, не Custom Events в общем графе. Actor BeginPlay не назначает время: уровень вызывает явный InitializeNewGame, а при загрузке вместо него вызывается RestoreWorldTime. До начала F05 SaveGame не существует, тест восстановления пользуется явным вызовом. Нет автоматического реального времени в F00.
@@ -138,3 +138,5 @@ See BP_F00ClockProbe. Reject before ready/duplicate world/invalid delta/reason/r
 - [Epic UE 5.8 Get All Actors Of Class](https://dev.epicgames.com/documentation/unreal-engine/BlueprintAPI/Actor/GetAllActorsOfClass), [Is Gameplay Tag Valid](https://dev.epicgames.com/documentation/unreal-engine/BlueprintAPI/GameplayTags/IsGameplayTagValid).
 
 Blueprint interface behavior and function graphs: [Epic Blueprint Interface](https://dev.epicgames.com/documentation/unreal-engine/blueprint-interface-in-unreal-engine?lang=en-US) (served 5.9; local 5.8.4 check required). [F00 foundation](../../../../../gameplay/reference/SURVIVAL_FOUNDATION_00_TO_UE.md).
+
+Поправка авторского порядка: изменён уровень размещения; F00 graph без изменений. Re-review остаётся открытым.

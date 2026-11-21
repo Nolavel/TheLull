@@ -20,13 +20,22 @@ project/
 │   └── DefaultGameplayTags.ini.md
 └── Content/
     ├── Maps/
-    │   └── L_KeyWestBlockout.md
+    │   ├── L_SurvivalCore.md
+    │   └── L_KeyWestBlockout.md (deferred)
     ├── Survival/
+    │   ├── Environment/
+    │   │   └── BP_CoreExposureZone.md
+    │   ├── Body/
+    │   │   ├── ST_CoreVitals.md
+    │   │   └── BPC_SurvivalBody.md
     │   └── Time/
     │       ├── E_SimPhase.md
     │       ├── ST_SimStep.md
     │       ├── BPI_SimStepReceiver.md
     │       └── BP_SurvivalWorld.md
+    ├── UI/Survival/
+    │   ├── WBP_VitalsHUD.md
+    │   └── WBP_SurvivalDebug.md
     └── Tests/
         └── Survival/
             └── BP_F00ClockProbe.md
@@ -36,15 +45,18 @@ project/
 
 ## Ближайшая локальная сессия (вторник, 24.11.2026)
 
-Приоритет автора — настройка, не обещание готовой механики. Claude Local: создать Third Person Blueprint (None) проект, проверить UE 5.8.4 и реальные MCP capabilities; открыть штатный уровень, выполнить базовый PIE, записать доступные операции и блокировки. Если останутся время и подходящий проверенный stencil, выполнить один малый полный цикл: `E_SimPhase` — создание/Save/reopen + сверка значений (сам Enum не имеет PIE), затем при доступности зависимостей минимальное использование в BP/PIE. Не считать сохранение Enum доказательством поведения clock. Допустимо закончить сессию на настройке среды. После этого начать F−1 с проходимого отрезка улицы и двух входов; это этап проверки камеры/масштаба, **не сокращение утверждённого квартала**.
+Приоритет автора — настройка, не обещание готовой механики. Claude Local: создать Third Person Blueprint (None) проект, проверить UE 5.8.4 и реальные MCP capabilities; открыть штатный уровень, выполнить базовый PIE, записать доступные операции и блокировки. Если останутся время и подходящий проверенный stencil, выполнить один малый полный цикл: `E_SimPhase` — создание/Save/reopen + сверка значений (сам Enum не имеет PIE), затем при доступности зависимостей минимальное использование в BP/PIE. Не считать сохранение Enum доказательством поведения clock. Допустимо закончить сессию на настройке среды. После этого F00 и Core на штатном уровне. География не требуется.
 
-До локального запуска: Codex может готовить исходную геометрию F−1 и исследовать связи F01/F02, не меняя проверяемый snapshot F00 без конкретной причины. Первичный выход на F01 — связь наружной температуры/ветра, укрытия и конечного тепла, а не новая абстрактная симуляция. Открытые результаты lab сохраняются как вопросы дизайна, не как установленный баланс.
+**Уточнение автора 21.11.2026 (заменяет прежний порядок):** сначала ядро survival по The Long Dark, затем минимальный UI и Debug UI с рабочими индикаторами; география только после этого. Штатная Third Person площадка нужна для запуска, не реконструкция квартала. Key West не отменён, но не является зависимостью core. Первичные F01/F02 используют контролируемый температурный вход, полная климатическая модель позднее.
+До локального запуска: предметный core, HUD, Debug. Географию не начинать.
 
 ## Порядок
 
-1. **F−1**: Claude Local настраивает MCP, создаёт Third Person Blueprint project (Variant None), подтверждает .uproject / установленный UE 5.8.4 / template / реально доступные MCP operations. Перед сборкой — результат предварительного ревью Cloud по SHA трафарета.
-2. **F−1**: [L_KeyWestBlockout](Content/Maps/L_KeyWestBlockout.md), улицы, несколько укрытий, 727 не главный shelter. Проверка географии PR #340, камеры и перемещения в PIE.
-3. **F00**: [Config](Config/DefaultGameplayTags.ini.md) → [E_SimPhase](Content/Survival/Time/E_SimPhase.md) + [ST_SimStep](Content/Survival/Time/ST_SimStep.md) → [BPI_SimStepReceiver](Content/Survival/Time/BPI_SimStepReceiver.md) → [BP_SurvivalWorld](Content/Survival/Time/BP_SurvivalWorld.md) → [BP_F00ClockProbe](Content/Tests/Survival/BP_F00ClockProbe.md). Подключаем к той же карте; probe opt-in. Пустая TimeLab не нужна.
-4. После каждого asset Claude Local через MCP: build → Compile/Save → inspect → PIE → actual vs stencil → [BACKLOG](BACKLOG.md) → handoff Codex. Дальше F01 и последующие связи на этой карте.
+**Разрешение автора 21.11.2026:** Codex может целевыми коммитами публиковать подготовленные survival MD-трафареты и их документы в `production` ДО независимого ревью, с явным статусом `NEEDS REVIEW` / `NEEDS RE-REVIEW` и указанием snapshot/зависимостей. Это не разрешение на произвольный merge ветки, перенос lab/CI или изменение чужой ветки. Local не считает такие MD готовыми к сборке до Cloud review и проверки реального MCP.
 
-Официальная документация [UE 5.8](https://dev.epicgames.com/documentation/en-us/unreal-engine?application_version=5.8) и [Blueprint API](https://dev.epicgames.com/documentation/en-us/unreal-engine/BlueprintAPI?application_version=5.8): проверить версию в селекторе, пины и возможности в установленной 5.8.4. **Ни один из наших ассетов ещё не создан и PIE не проверялся.** F00 revised after Cloud #3; re-review pending. Map, enum, struct, interface, clock and probe must be reviewed as one dependency set.
+1. **F−1**: Claude Local настраивает MCP, создаёт Third Person Blueprint project (Variant None), подтверждает .uproject / установленный UE 5.8.4 / template / реально доступные MCP operations. Перед сборкой — результат предварительного ревью Cloud по SHA трафарета.
+2. **F−1**: [L_SurvivalCore](Content/Maps/L_SurvivalCore.md), копия штатного уровня, не район.
+3. **F00**: [Config](Config/DefaultGameplayTags.ini.md) → [E_SimPhase](Content/Survival/Time/E_SimPhase.md) + [ST_SimStep](Content/Survival/Time/ST_SimStep.md) → [BPI_SimStepReceiver](Content/Survival/Time/BPI_SimStepReceiver.md) → [BP_SurvivalWorld](Content/Survival/Time/BP_SurvivalWorld.md) → [BP_F00ClockProbe](Content/Tests/Survival/BP_F00ClockProbe.md). Подключаем к L_SurvivalCore; probe opt-in.
+4. После каждого asset Claude Local через MCP: build → Compile/Save → inspect → PIE → actual vs stencil → [BACKLOG](BACKLOG.md) → handoff Codex. Дальше [BP_CoreExposureZone](Content/Survival/Environment/BP_CoreExposureZone.md) + [ST_CoreVitals](Content/Survival/Body/ST_CoreVitals.md) → [BPC_SurvivalBody](Content/Survival/Body/BPC_SurvivalBody.md) → [HUD](Content/UI/Survival/WBP_VitalsHUD.md) → [Debug](Content/UI/Survival/WBP_SurvivalDebug.md). География после рабочего ядра.
+
+Официальная документация [UE 5.8](https://dev.epicgames.com/documentation/en-us/unreal-engine?application_version=5.8) и [Blueprint API](https://dev.epicgames.com/documentation/en-us/unreal-engine/BlueprintAPI?application_version=5.8): проверить версию в селекторе, пины и возможности в установленной 5.8.4. **Ни один из наших ассетов ещё не создан и PIE не проверялся.** F00 revised after Cloud #3; re-review pending. Новый уровень размещения, core и UI — NEEDS REVIEW; F00 graph не менялся.

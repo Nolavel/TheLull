@@ -7,6 +7,12 @@
 
 ## Unreleased
 
+### Decision / Added (production: Core before geography; drafts before review, 21.11.2026)
+
+- Автор изменил приоритет: TLD survival core → minimal HUD → Debug UI → связанные действия/ресурсы → география. Трафареты можно публиковать в production до Cloud review, явно NEEDS REVIEW / NEEDS RE-REVIEW; это не статус готовности к сборке. F00 размещён на L_SurvivalCore; граф часов не изменён. Старый план квартала DEFERRED.
+- Перенесены ST_CoreVitals, BPC_SurvivalBody, WBP_VitalsHUD, WBP_SurvivalDebug, L_SurvivalCore и BP_CoreExposureZone (реальная позиция pawn влияет на тепловой вход, debug override отдельно). Источник: ue-codex@2d4a761e9df7393891f7b5065e389e40b69028df; synthetic coefficients, UE/MCP/PIE NOT RUN. Lab/CI и чужие ветки не переносились. Codex / production.
+
+
 ### Changed (production: corrected F00 drafts + local setup priority, 21.11.2026)
 
 - По разрешению автора перенесены только исправленные MD-трафареты F00 и связанные документы из ue-codex@1b15f38c4978167bb6e6f8a3fd190ba6cf31100b: Float double subtype, explicit init/restore, phase enum/cache, private clock, duplicate guard, target loop, derived duration, rejection/cleanup, negative probe checks. Claude подтвердил применение десяти замечаний, полный re-review ещё ожидается; статус revised draft, не assembled/PIE tested.
