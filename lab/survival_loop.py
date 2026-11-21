@@ -17,28 +17,33 @@ from .agent import Agent
 from .body import DEATH_C, Body
 from .evening import Room, Tomorrow, UNDECIDED, choose, step_body
 from .evening_run import play
-from .sim import DEPART_AFTER_DAWN_MIN, clock, run_day
+from .sim import DEPART_AFTER_DAWN_MIN, DayRecord, clock, run_day
 from .world import DAY_MINUTES, World
 
 STEP_H = 0.25
 
 
-def _shelter_wait(room: Room, body: Body, outside_c: float, minutes: float) -> None:
-    """A real time advance while indoors: the room, stove and body all evolve."""
+def _shelter_wait(room: Room, body: Body, outside_c: float, minutes: float) -> float:
+    """Only actually elapsed minutes are billed, including partial terminal ticks."""
     if minutes < -1e-8:
         raise ValueError("time cannot move backwards")
     left = max(0.0, minutes / 60.0)
-    while left > 1e-9:
+    used = 0.0
+    while left > 1e-9 and not body.terminal:
         step = min(STEP_H, left)
         room.step(step)
-        step_body(body, room, outside_c, step, asleep=False, fatigue_per_h=2.0)
-        left -= step
+        actual = step_body(body, room, outside_c, step, asleep=False, fatigue_per_h=2.0)
+        if actual <= 0:
+            break
+        used += actual
+        left -= actual
+    return used * 60.0
 
 
 def run(seed: int, days: int = 3, *, variant: str = "B_readable",
         profile: str = "local", intentions: list[Tomorrow] | None = None,
         initial_furniture: int = 2, recheck_policy: bool = True) -> dict:
-    """Advance from one dawn to the next, preserving actual resources and memories."""
+    """Advance one shared state. Partial days are NOT credited as dawns."""
     if days < 1:
         raise ValueError("days must be positive")
     if initial_furniture < 0:
@@ -53,83 +58,120 @@ def run(seed: int, days: int = 3, *, variant: str = "B_readable",
 
     for day in range(1, days + 1):
         weather = world.roll_weather(random.Random(f"{seed}:weather:{day}"))
+        start_clock = world.dawn_min + (day - 1) * DAY_MINUTES
+        start_elapsed = body.elapsed_minutes
         fuel_at_dawn = room.fuel
         core_at_dawn = body.core_c
         fatigue_at_dawn = body.fatigue
         furniture_at_dawn = room.furniture
+        day_record = DayRecord(day=day, fuel_morning=room.fuel)
+        plan = intentions[(day - 1) % len(intentions)] if intentions else UNDECIDED
+        revised = plan
+        proposed = None
+        why = "до вечернего выбора не дошёл"
+        night = None
+        learned = "ночных наблюдений нет"
+        departure = world.dawn_min + max(
+            0, DEPART_AFTER_DAWN_MIN - (15 if body.packed else 0)
+        )
+        return_minute = None
+        evening_start = None
+        actual_night_h = 0.0
+        packed_before_departure = body.packed
+        phase = "morning_shelter"
 
-        # Morning preparation occupies real time, including a shortened prepared departure.
-        departure = world.dawn_min + max(0, DEPART_AFTER_DAWN_MIN - (15 if body.packed else 0))
         _shelter_wait(room, body, world.air_temp_c, departure - world.dawn_min)
         fuel_at_departure = room.fuel
-        packed_before_departure = body.packed
 
-        # The day observes the same body that woke after the previous night.
-        # No flat/synthetic night is charged by this call.
-        day_record, fuel_after_trip = run_day(
-            world, agent, weather, loot_rng, day, fuel_at_departure,
-            body=body, charge_legacy_night=False
-        )
+        if not body.terminal:
+            phase = "trip"
+            # Daytime travel, searching and storm waits use THIS same body.
+            day_record, _ = run_day(
+                world, agent, weather, loot_rng, day, fuel_at_departure,
+                body=body, charge_legacy_night=False
+            )
 
-        # The stove continues burning in the actual shelter during the trip,
-        # not for free while the traveller is outside.
-        if day_record.went_out:
-            assert day_record.actual_return is not None
-            elapsed_out = day_record.actual_return - departure
-            if elapsed_out < -1e-8:
-                raise ValueError("return precedes departure")
-            room.step(elapsed_out / 60.0)
-            room.fuel += day_record.carried
-            body.packed = False  # its travel preparation has been used
-            return_minute = float(day_record.actual_return)
-        else:
-            return_minute = float(departure)
+        if not body.terminal:
+            # A returned trip deposits only what actually made it home.
+            if day_record.went_out:
+                if day_record.actual_return is None:
+                    raise AssertionError("nonterminal trip has no actual return")
+                elapsed_out = day_record.actual_return - departure
+                if elapsed_out < -1e-8:
+                    raise ValueError("return precedes departure")
+                room.step(elapsed_out / 60.0)
+                room.fuel += day_record.carried
+                body.packed = False
+                return_minute = float(day_record.actual_return)
+            else:
+                return_minute = float(departure)
 
-        # No omitted hours between return and dusk: they are spent in the shelter.
-        evening_start = max(float(world.day_length), return_minute)
-        _shelter_wait(room, body, world.air_temp_c, evening_start - return_minute)
-        actual_night_h = ((world.dawn_min + DAY_MINUTES) - evening_start) / 60.0
-        if actual_night_h <= 0:
-            end_reason = "не вернулся к следующему рассвету"
-            break
+            phase = "day_shelter"
+            evening_start = max(float(world.day_length), return_minute)
+            _shelter_wait(room, body, world.air_temp_c, evening_start - return_minute)
 
-        plan = intentions[(day - 1) % len(intentions)] if intentions else UNDECIDED
-        proposed, why, revised = choose(
-            body, room, agent.beliefs, plan, world.air_temp_c,
-            daylight_hours=world.daylight_hours, night_hours=actual_night_h
-        )
-        night = play(proposed["option"], world.air_temp_c, room, body, agent.beliefs,
-                     hours_of_night=actual_night_h)
+        if not body.terminal:
+            actual_night_h = (
+                world.dawn_min + DAY_MINUTES - evening_start
+            ) / 60.0
+            if actual_night_h <= 0:
+                end_reason = "не вернулся к следующему рассвету"
+            else:
+                phase = "evening_and_night"
+                proposed, why, revised = choose(
+                    body, room, agent.beliefs, plan, world.air_temp_c,
+                    daylight_hours=world.daylight_hours,
+                    night_hours=actual_night_h
+                )
+                night = play(
+                    proposed["option"], world.air_temp_c, room, body,
+                    agent.beliefs, hours_of_night=actual_night_h
+                )
+                if not body.terminal:
+                    if night["observed_burn_rate"] is not None:
+                        learned = agent.beliefs.observe_burn_rate(
+                            night["observed_burn_rate"]
+                        )
+                    elif night["burn_rate_lower_bound"] is not None:
+                        learned = agent.beliefs.observe_rate_lower_bound(
+                            night["burn_rate_lower_bound"]
+                        )
 
-        learned = "наблюдений о расходе нет"
-        if night["observed_burn_rate"] is not None:
-            learned = agent.beliefs.observe_burn_rate(night["observed_burn_rate"])
-        elif night["burn_rate_lower_bound"] is not None:
-            learned = agent.beliefs.observe_rate_lower_bound(night["burn_rate_lower_bound"])
+        elapsed_today = body.elapsed_minutes - start_elapsed
+        if body.terminal:
+            end_reason = body.terminal_reason
+        elif end_reason is None:
+            if abs(elapsed_today - DAY_MINUTES) > 1e-5:
+                raise AssertionError(
+                    f"missing or double-billed time: {elapsed_today} / 1440 minutes"
+                )
+            if body.fatigue >= 100.0:
+                end_reason = "усталость достигла предела"
+            elif (room.fuel <= 0 and room.furniture <= 0
+                  and not any(v > 0 for v in world.loot.values())):
+                end_reason = "исчерпаны доступные в районе источники топлива"
 
-        total_min = departure - world.dawn_min + (
-            return_minute - departure) + (evening_start - return_minute) + actual_night_h * 60
-        if abs(total_min - DAY_MINUTES) > 1e-6:
-            raise AssertionError(f"lost or double-counted time: {total_min} minutes")
         if room.fuel < -1e-9 or room.furniture < 0 or any(v < 0 for v in world.loot.values()):
             raise AssertionError("world created negative resources")
-
-        if body.core_c <= DEATH_C + 0.2:
-            end_reason = "температура тела достигла предела"
-        elif body.fatigue >= 100.0:
-            end_reason = "усталость достигла предела"
-        elif room.fuel <= 0 and room.furniture <= 0 and not any(v > 0 for v in world.loot.values()):
-            end_reason = "исчерпаны доступные в районе источники топлива"
-
+        complete_dawn = not body.terminal and abs(elapsed_today - DAY_MINUTES) < 1e-5
+        elapsed_rounded = round(elapsed_today, 6)
         history.append({
             "day": day, "world_weather": asdict(weather),
-            "starting_dawn_minute": world.dawn_min + (day - 1) * DAY_MINUTES,
-            "next_dawn_minute": world.dawn_min + day * DAY_MINUTES,
-            "minutes_accounted": round(total_min, 4),
-            "departure_minute": round(departure, 3),
-            "return_minute": round(return_minute, 3),
-            "night_start_minute": round(evening_start, 3),
-            "night_hours": round(actual_night_h, 3),
+            "starting_dawn_minute": start_clock,
+            # None is intentional: a partial day must not invent the next dawn.
+            "next_dawn_minute": start_clock + DAY_MINUTES if complete_dawn else None,
+            "completed_dawn": complete_dawn,
+            "phase_at_end": phase,
+            "minutes_accounted": elapsed_rounded,
+            "stop_at_minute": round(start_clock + elapsed_today, 6),
+            "terminal_at_minute": body.terminal_at_minute,
+            "departure_minute": round(departure, 3)
+                if phase != "morning_shelter" else None,
+            "return_minute": round(return_minute, 3)
+                if return_minute is not None else None,
+            "night_start_minute": round(evening_start, 3)
+                if evening_start is not None and phase == "evening_and_night" else None,
+            "night_hours": round(actual_night_h, 6),
             "fuel_at_dawn": round(fuel_at_dawn, 3),
             "fuel_at_departure": round(fuel_at_departure, 3),
             "carried": day_record.carried,
@@ -141,20 +183,32 @@ def run(seed: int, days: int = 3, *, variant: str = "B_readable",
             "fatigue_at_dawn": round(fatigue_at_dawn, 3),
             "fatigue_next_dawn": round(body.fatigue, 3),
             "packed_before_departure": packed_before_departure,
-            "day_trip": {"went_out": day_record.went_out,
-                         "target": day_record.target,
-                         "carried": day_record.carried,
-                         "search_minutes": day_record.search_minutes,
-                         "recheck_searches": day_record.recheck_searches,
-                         "empty_searches": day_record.empty_searches,
-                         "events": day_record.events,
-                         "decisions": [asdict(d) for d in day_record.decisions]},
-            "evening": {"intention": plan.name, "revision": revised.name,
-                        "chose": proposed["option"],
-                        "why": why,
-                        "predicted_ready": proposed["ready_for_tomorrow_expected"],
-                        "lesson": learned},
-            "night": night,
+            "day_trip": {
+                "went_out": day_record.went_out,
+                "target": day_record.target,
+                "carried": day_record.carried,
+                "search_minutes": day_record.search_minutes,
+                "recheck_searches": day_record.recheck_searches,
+                "empty_searches": day_record.empty_searches,
+                "terminal_minute": day_record.terminal_minute,
+                "events": day_record.events,
+                "decisions": [asdict(d) for d in day_record.decisions],
+            },
+            "evening": {
+                "intention": plan.name, "revision": revised.name,
+                "chose": proposed["option"] if proposed else "NOT_REACHED",
+                "why": why,
+                "predicted_ready": (proposed["ready_for_tomorrow_expected"]
+                                    if proposed else None),
+                "lesson": learned,
+            },
+            "night": night if night is not None else {
+                "night_elapsed_h": 0.0,
+                "slept_hours": 0.0,
+                "woke_cold": 0,
+                "fire_out_at": None,
+                "terminal": body.terminal_reason,
+            },
             "beliefs_after": {
                 "cooling_rate_est": round(agent.beliefs.cooling_rate_est, 4),
                 "burn_rate_est": round(agent.beliefs.burn_rate_est, 4),
@@ -168,14 +222,25 @@ def run(seed: int, days: int = 3, *, variant: str = "B_readable",
         if end_reason:
             break
 
-    return {"seed": seed, "variant": variant, "profile": profile,
-            "days_requested": days, "days_completed": len(history),
-            "recheck_policy": recheck_policy,
-            "end_reason": end_reason, "history": history,
-            "limits": ["Daytime choices still optimize fuel, not water/food.",
-                       "A fixed dawn+dusk schedule, no interpolated weather across midnight.",
-                       "No resource respawn or balance calibration.",
-                       "Legacy sim.run and standalone linked_days remain separate research baselines."]}
+    return {
+        "seed": seed, "variant": variant, "profile": profile,
+        "days_requested": days,
+        "days_started": len(history),
+        "days_completed": sum(d["completed_dawn"] for d in history),
+        "elapsed_minutes": round(body.elapsed_minutes, 6),
+        "elapsed_days": round(body.elapsed_minutes / DAY_MINUTES, 6),
+        "terminal_at_minute": body.terminal_at_minute,
+        "recheck_policy": recheck_policy,
+        "end_reason": end_reason, "history": history,
+        "limits": [
+            "Partial days are counted in elapsed_minutes, NOT days_completed.",
+            "The terminal threshold is a game-model stop, not a physiological prediction.",
+            "Daytime choices still optimize fuel, not water/food.",
+            "A fixed dawn+dusk schedule, no interpolated weather across midnight.",
+            "No resource respawn or balance calibration.",
+            "Legacy sim.run and standalone linked_days remain separate baselines."
+        ],
+    }
 
 
 def study(seeds: int = 30, days: int = 7) -> dict:
