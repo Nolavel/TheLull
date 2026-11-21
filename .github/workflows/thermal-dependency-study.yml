@@ -52,13 +52,15 @@ jobs:
                     f"{x['runs_ever_hitting_temperature_floor']} | {x['runs_rewarming_after_floor']} | "
                     f"{x['mean_h_to_first_floor_among_hits']} | {x['mean_h_unchecked_after_floor_among_hits']} |")
           print("\\n### First threshold crossing — baseline and counterfactuals")
-          print("| World | Arm | Floor hits /60 | Mean first hit h from dawn | First-hit phase | Rewarmed after floor |")
-          print("|---|---|---:|---:|---|---:|")
+          print("| World | Arm | Floor hits /60 | Before first dusk | Mean first hit h after dawn | First-hit phase | Rewarmed after floor | Seven days with no floor hit |")
+          print("|---|---|---:|---:|---:|---|---:|---:|")
           for variant in ("B_readable", "C_unreadable"):
               for arm, x in r["by_variant"][variant].items():
                   print(f"| {variant} | {arm} | {x['runs_ever_hitting_temperature_floor']} | "
+                        f"{x['runs_hitting_floor_before_first_dusk']} | "
                         f"{x['mean_h_to_first_floor_among_hits']} | {x['first_floor_phases']} | "
-                        f"{x['runs_rewarming_after_floor']} |")
+                        f"{x['runs_rewarming_after_floor']} | "
+                        f"{x['runs_reaching_horizon_without_floor']} |")
           print("\\nChecks: ",r["checks"])
           print("No expected success or preferred strategy is hardcoded.")
           assert not any(r["checks"].values()),r["checks"]
