@@ -96,11 +96,13 @@ def _predicted_trip(agent: Agent, node: str) -> float:
 
 
 def run_day(world: World, agent: Agent, weather: DayWeather, lrng: random.Random, day: int, fuel: int,
-            signals_visible: bool = True, body: Body | None = None) -> tuple[DayRecord, int]:
+            signals_visible: bool = True, body: Body | None = None,
+            *, charge_legacy_night: bool = True) -> tuple[DayRecord, int]:
     body = body if body is not None else Body()
     rec = DayRecord(day=day, fuel_morning=fuel, margin=agent.margin, signal_trust=agent.beliefs.signal_trust(),
                     storm_start=weather.storm_start, storm_end=weather.storm_end, min_core_c=body.core_c)
-    depart = world.dawn_min + DEPART_AFTER_DAWN_MIN
+    # Packing pays for a shorter morning setup; the clock stays absolute.
+    depart = world.dawn_min + max(0, DEPART_AFTER_DAWN_MIN - (15 if body.packed else 0))
 
     if fuel >= world.fuel_per_night + 1:
         rec.decisions.append(Decision(
@@ -109,7 +111,7 @@ def run_day(world: World, agent: Agent, weather: DayWeather, lrng: random.Random
             [{"option": "выйти за запасами", "basis": "не нужно сейчас"}],
             "остаться дома", "выход сейчас не даст выгоды"))
         rec.events.append("топлива хватает — остался дома")
-        return _night(world, rec, fuel)
+        return _finish_day(world, rec, fuel, charge_legacy_night)
 
     ranking = agent.rank_targets()
     if ranking:
@@ -129,7 +131,7 @@ def run_day(world: World, agent: Agent, weather: DayWeather, lrng: random.Random
                 clock(depart), "цель", "нет известной цели",
                 ["известных запасов нет", "неизученных мест нет"], [], "остаться дома", "некуда идти"))
             rec.events.append("не знает, куда идти — остался дома")
-            return _night(world, rec, fuel)
+            return _finish_day(world, rec, fuel, charge_legacy_night)
         target = min(unexplored, key=lambda n: agent.path("home", n)[0])
         target_dec = Decision(
             clock(depart), "разведка", "узнать, что есть рядом",
@@ -321,7 +323,15 @@ def run_day(world: World, agent: Agent, weather: DayWeather, lrng: random.Random
     if note:
         rec.events.append(note)
         target_dec.belief_update += note
-    return _night(world, rec, fuel)
+    return _finish_day(world, rec, fuel, charge_legacy_night)
+
+
+def _finish_day(world: World, rec: DayRecord, fuel: int, legacy: bool) -> tuple[DayRecord, int]:
+    """Integrated loops own night once. Legacy day-only experiments keep their old flat charge."""
+    if legacy:
+        return _night(world, rec, fuel)
+    rec.next_intention = "выйти за топливом" if fuel <= world.fuel_per_night else "выхода не требуется"
+    return rec, fuel
 
 
 def _night(world: World, rec: DayRecord, fuel: int) -> tuple[DayRecord, int]:
