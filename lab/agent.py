@@ -66,6 +66,27 @@ class Beliefs:
     # body's lived observations, NEVER copied from the hidden physics knobs.
     shelter_core_cooling_est: float = 1.0  # °C of body core lost per sheltered hour
     stove_effect_est: float = 8.0          # guessed benefit of a lit stove (°C felt)
+    # Clothing-trip beliefs learn only from the actor's own finished walks.
+    # Wet cost is observed directly; a counterfactual dry advantage remains
+    # a fallible prior and is never copied from the world's hidden coefficients.
+    wet_walk_stamina_per_h_est: float = 16.0
+    wet_walk_core_loss_per_h_est: float = 0.7
+    wet_walk_samples: int = 0
+
+    def observe_wet_walk(self, *, hours: float, stamina_demand: float,
+                         core_before: float, core_after: float) -> str:
+        if hours <= 0:
+            return ""
+        stamina_h = max(0.0, stamina_demand / hours)
+        core_h = max(0.0, (core_before - core_after) / hours)
+        old = (self.wet_walk_stamina_per_h_est,
+               self.wet_walk_core_loss_per_h_est)
+        self.wet_walk_stamina_per_h_est = 0.5 * old[0] + 0.5 * stamina_h
+        self.wet_walk_core_loss_per_h_est = 0.5 * old[1] + 0.5 * core_h
+        self.wet_walk_samples += 1
+        return (f"пережитая мокрая ходьба {hours:.2f} ч: "
+                f"stamina/ч {old[0]:.2f}→{self.wet_walk_stamina_per_h_est:.2f}, "
+                f"core/ч {old[1]:.2f}→{self.wet_walk_core_loss_per_h_est:.2f}")
 
     def observe_shelter_cooling(self, before_c: float, after_c: float,
                                elapsed_h: float) -> str:
