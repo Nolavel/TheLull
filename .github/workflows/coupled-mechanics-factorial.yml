@@ -41,6 +41,15 @@ jobs:
                             f"{r['mean_elapsed_h']} | {r['water_prepared']} | "
                             f"{r['mean_wetness_at_dusk']} | {r['mean_fuel_burned']} | "
                             f"{r['choices']} |")
+          print("\\n### Clothing advantage: same path, same weather, SAME decision")
+          print("| World | Paired paths | Dry core °C | Wet core °C | Dry stamina | Wet stamina | Dry walk min | Wet walk min | Dry pace | Wet pace |")
+          print("|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|")
+          for world,v in d["physical_advantages_same_route"].items():
+              print(f"| {world} | {v['n_paired']} | {v['dry_core_c']} | {v['wet_core_c']} | "
+                    f"{v['dry_stamina_after_walk']} | {v['wet_stamina_after_walk']} | "
+                    f"{v['dry_travel_min']} | {v['wet_travel_min']} | "
+                    f"{v['dry_pace_stability']} | {v['wet_pace_stability']} |")
+          print("The dry kit avoids extra losses; it is not a forced drying quest or a free stamina buff.")
           print("\\n### Interaction (difference-in-differences; not fun)")
           print("| World | Policy | Elapsed hours interaction | Fuel interaction | Core at dusk interaction |")
           print("|---|---|---:|---:|---:|")
