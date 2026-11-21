@@ -361,8 +361,10 @@ def study()->dict:
     ))
     counters=Counter()
     actions=defaultdict(Counter)
+    by_opportunity=defaultdict(Counter)
     checks=Counter()
     examples=[]
+    distinct_replans=[]
     all_rows=[]
     for condition in conditions:
         row=_case(*condition)
@@ -376,9 +378,25 @@ def study()->dict:
             if row["same_time_without_physical_night"]["available"] and row[
                 "actual_morning_job_opportunity"]["available"]:
                 counters["work_remained_possible"]+=1
+            category=("lost_by_night" if row["physically_lost_job_opportunity"]
+                      else "gained_by_night" if row["physically_gained_job_opportunity"]
+                      else "still_possible" if row["actual_morning_job_opportunity"]["available"]
+                      else "blocked_before_and_after")
+            by_opportunity[category]["cases"]+=1
             for mode,d in row["policies"].items():
                 action=d["first_decision"]["choice"]
                 actions[mode][action]+=1
+                by_opportunity[category][mode+":work_completed"]+=int(d["work_completed"])
+                by_opportunity[category][mode+":second_dawn"]+=int(
+                    d["second_night"]["completed_next_dawn"]
+                )
+                by_opportunity[category][mode+":terminal"]+=int(d["final"]["terminal"])
+                by_opportunity[category][mode+":missed_work"]+=int(d["work_missed_by_deadline"])
+                by_opportunity[category][mode+":prepared"]+=int(d["final"]["packed"])
+                by_opportunity[category][mode+":sealed"]+=int(d["final"]["sealed"])
+                by_opportunity[category][mode+":fuel_end_milli"]+=int(round(
+                    d["final"]["fuel"]*1000
+                ))
                 counters[mode+":work_completed"]+=int(d["work_completed"])
                 counters[mode+":second_dawn"]+=int(d["second_night"]["completed_next_dawn"])
                 counters[mode+":missed_work"]+=int(d["work_missed_by_deadline"])
@@ -417,14 +435,26 @@ def study()->dict:
                     abs(d["final"]["minute"]-2*DAY_MINUTES)>1e-4
                 ):
                     checks["fake_second_dawn"]+=1
-            if row["physically_lost_job_opportunity"]:
-                a=row["policies"]["opportunity"]
-                b=row["policies"]["continue_job"]
-                if a["first_decision"]["choice"]!=b["first_decision"]["choice"]:
+            a=row["policies"]["opportunity"]
+            b=row["policies"]["continue_job"]
+            if a["first_decision"]["choice"]!=b["first_decision"]["choice"]:
+                by_opportunity[category]["different_first_action"]+=1
+                if row["physically_lost_job_opportunity"]:
                     counters["lost_opportunity_changed_real_action"]+=1
                     counters["lost:"+a["first_decision"]["choice"]]+=1
-                if len(examples)<22:
-                    examples.append(row)
+                    if len(distinct_replans)<15:
+                        distinct_replans.append(row)
+            if row["physically_lost_job_opportunity"] and len(examples)<22:
+                examples.append(row)
+            if a["first_decision"]["cues"]!=b["first_decision"]["cues"]:
+                checks["unpaired_morning_observations"]+=1
+            if a["actions"] and b["actions"]:
+                before_a=a["actions"][0]["before"]
+                before_b=b["actions"][0]["before"]
+                for field in ("minute","core","stamina","fatigue","fuel",
+                              "furniture","packed","sealed","pending"):
+                    if before_a[field]!=before_b[field]:
+                        checks["divergent_initial_morning_state"]+=1
         else:
             counters["nights_without_next_dawn"]+=1
             if row["policies"]:
@@ -438,13 +468,16 @@ def study()->dict:
                   "human_participants":0},
         "counts":dict(counters),
         "first_action_by_policy":{k:dict(v) for k,v in actions.items()},
+        "outcomes_by_opportunity":{k:dict(v) for k,v in by_opportunity.items()},
         "examples":examples,
+        "distinct_lost_work_replans":distinct_replans,
         "all_cases":all_rows,
         "checks":{k:checks[k] for k in (
             "unavailable_choice","unbilled_time","free_fuel",
             "unpaid_furniture","fake_work","missing_persistent_benefit",
             "negative_resource","fake_second_dawn",
-            "terminal_issued_morning_action"
+            "terminal_issued_morning_action",
+            "unpaired_morning_observations","divergent_initial_morning_state"
         )},
         "limits":[
             "Controlled evening body, resources and preparation options, NOT a complete prior outdoor day; full day/night lab remains D1.9.",
@@ -469,6 +502,7 @@ def main()->None:
         "design":report["design"],
         "counts":report["counts"],
         "first_action_by_policy":report["first_action_by_policy"],
+        "outcomes_by_opportunity":report["outcomes_by_opportunity"],
         "checks":report["checks"],
     },ensure_ascii=False,indent=2))
 
