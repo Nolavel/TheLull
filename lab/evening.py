@@ -126,7 +126,7 @@ def step_body(body: Body, room: Room, outside_c: float, hours: float, asleep: bo
         room.step(used)
     step_core(body, room.felt_c(outside_c), used)
     billed = body.last_step_hours
-    if billed < used - 1e-8:
+    if billed < used - 1e-8 and previous is not None:
         # Numerical boundary: refund the last microscopic partial interval.
         room.fuel, room.heated_offset_c, room.fire_lit = previous
         room.step(billed)
