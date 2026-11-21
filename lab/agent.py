@@ -57,6 +57,27 @@ class Beliefs:
     cooling_rate_est: float = 3.0  # how fast the player thinks the room bleeds its warmth, °C/h
     burn_rate_est: float = 1.0  # how fast the player thinks fuel burns, units/h
     recovery_est: float = 6.0  # how much rest the player thinks a warm hour of sleep pays back
+    work_hours_est: dict[str, float] = field(default_factory=dict)
+
+    def expected_work_hours(self, work) -> float:
+        return self.work_hours_est.get(work.name, work.hours)
+
+    def observe_burn_rate(self, measured_per_h: float) -> str:
+        if measured_per_h <= 0:
+            raise ValueError("observed burn rate must be positive")
+        old = self.burn_rate_est
+        self.burn_rate_est = 0.5 * old + 0.5 * measured_per_h
+        return f"наблюдаемый расход топлива: {old:.2f}→{self.burn_rate_est:.2f} в час"
+
+    def observe_rate_lower_bound(self, minimum_per_h: float) -> str:
+        if minimum_per_h <= 0:
+            raise ValueError("rate bound must be positive")
+        old = self.burn_rate_est
+        if old >= minimum_per_h:
+            return "погасший огонь не уточнил оценку расхода"
+        self.burn_rate_est = 0.5 * (old + minimum_per_h)
+        return (f"огонь уже погас: расход не меньше {minimum_per_h:.2f} в час; "
+                f"оценка {old:.2f}→{self.burn_rate_est:.2f}")
 
     def hours_of_fire(self, fuel: float) -> float:
         return fuel / max(0.1, self.burn_rate_est)
