@@ -31,6 +31,15 @@ WET_INSULATION_LOSS_C = 5.0
 DRY_CORE_ADVANTAGE_C_PER_H = WET_INSULATION_LOSS_C * COOLING_COEF
 BELIEVED_DRY_ADVANTAGE_C_PER_H = 0.30  # tentative actor estimate, NOT true physics
 
+# D1 movement/stamina placeholders: DRY is the unpenalized reference.
+# Wet kit costs a little more effort and makes outdoor pace less consistent.
+# This is a small elapsed-time proxy, not a locomotion animation/slip model.
+BASE_WALK_STAMINA_PER_H = 12.0
+WET_EXTRA_STAMINA_PER_H = 3.0
+WET_EXTRA_FATIGUE_PER_H = 0.8
+WET_PACE_INSTABILITY = 0.04
+WET_EXPOSED_PACE_VARIATION = 0.01
+
 # The planned preparation itself differs; movement and destination do not.
 EXPLORE = "искать дрова сейчас"
 DRY = "высушить одежду перед выходом"
@@ -52,10 +61,33 @@ class Equipment:
     def clothing_c(self) -> float:
         return CLOTHING_INSULATION_C - WET_INSULATION_LOSS_C * self.wetness
 
+    @property
+    def walk_stamina_per_h(self) -> float:
+        """Dry baseline; wet clothing increases exertion, not a free dry bonus."""
+        return BASE_WALK_STAMINA_PER_H + self.wetness * WET_EXTRA_STAMINA_PER_H
+
+    @property
+    def walk_fatigue_per_h(self) -> float:
+        return TRAVEL_FATIGUE_PER_H + self.wetness * WET_EXTRA_FATIGUE_PER_H
+
+    def movement_stability(self, *, wind: float = 0.0, exposure: float = 0.0) -> float:
+        """Pace consistency proxy. Dry=1; wet adds <=5% travel-time overhead.
+
+        Depend on observed wind and edge exposure only, with no new dice rolls,
+        falls or arbitrary positional jitter. UI movement cannot be tested here.
+        """
+        return 1.0 - self.wetness * (
+            WET_PACE_INSTABILITY + WET_EXPOSED_PACE_VARIATION * wind * exposure
+        )
+
+    def travel_minutes(self, base_minutes: float, *, wind: float, exposure: float) -> float:
+        return base_minutes / self.movement_stability(wind=wind, exposure=exposure)
+
 
 def _tick(body: Body, room: Room, world: World, gear: Equipment,
           minutes: float, *, at_home: bool, exposure: float = 0.0,
-          weather=None, work: str = "") -> float:
+          weather=None, work: str = "", travelling: bool = False,
+          walking_costs: dict | None = None) -> float:
     """Tick one physical clock. Stove burns whether the actor is at home or not."""
     if body.terminal or minutes < 0:
         return 0.0
@@ -80,19 +112,39 @@ def _tick(body: Body, room: Room, world: World, gear: Equipment,
     felt = world.felt_outdoors_c(exposure, world.dawn_min + body.elapsed_minutes, weather)
     step_core(body, felt, expected, clothing_c=gear.clothing_c)
     actual = body.last_step_hours
-    step_fatigue(body, actual, asleep=False, per_hour=TRAVEL_FATIGUE_PER_H)
+    if travelling:
+        # step_fatigue's generic awake state restores breath; an ACTIVE walk
+        # must instead spend breath. Indoor rest/night still restore it normally.
+        stamina_before = body.stamina
+        fatigue_before = body.fatigue
+        step_fatigue(body, actual, asleep=False, per_hour=gear.walk_fatigue_per_h)
+        spent = gear.walk_stamina_per_h * actual
+        body.stamina = max(0.0, stamina_before - spent)
+        if walking_costs is not None:
+            walking_costs["stamina_demand"] += spent
+            walking_costs["extra_fatigue"] += max(
+                0.0, body.fatigue - fatigue_before - TRAVEL_FATIGUE_PER_H * actual
+            )
+            walking_costs["walked_h"] += actual
+            walking_costs["minimum_stamina"] = min(
+                walking_costs["minimum_stamina"], body.stamina
+            )
+    else:
+        step_fatigue(body, actual, asleep=False, per_hour=TRAVEL_FATIGUE_PER_H)
     room.step(actual)
     return actual * 60
 
 
 def _advance(body: Body, room: Room, world: World, gear: Equipment,
              minutes: float, *, at_home: bool, exposure: float = 0.0,
-             weather=None, work: str = "") -> float:
+             weather=None, work: str = "", travelling: bool = False,
+             walking_costs: dict | None = None) -> float:
     accounted = 0.0
     while accounted < minutes - 1e-8 and not body.terminal:
         step = min(TICK_H * 60, minutes - accounted)
         billed = _tick(body, room, world, gear, step, at_home=at_home,
-                       exposure=exposure, weather=weather, work=work)
+                       exposure=exposure, weather=weather, work=work,
+                       travelling=travelling, walking_costs=walking_costs)
         accounted += billed
         if billed < step - 1e-7:
             break
@@ -104,8 +156,9 @@ def _options(stage: str, gear: Equipment, room: Room) -> list[dict]:
         (EXPLORE, True, 1.0, 0.0, "добыча конечна, улица охлаждает"),
         (DRY, gear.wetness > 1e-8 and (room.fuel > 0 or room.fire_lit),
          DRY_H, min(room.fuel, DRY_H),
-         "добровольная подготовка: сухая одежда уменьшает будущую потерю тепла; "
-         "действие тратит время и дрова"),
+         "добровольная подготовка: сухая одежда уменьшает потерю тепла, "
+         "сохраняет стамину при ходьбе и немного стабилизирует темп; "
+         "сушка тратит время и дрова"),
         (WATER, gear.raw_water > 0 and (room.fuel > 0 or room.fire_lit),
          WATER_H, min(room.fuel, WATER_H), "кипячение даст подготовленную воду; нужна печь"),
         (REST, True, 0.5, 0.0, "без новой добычи или подготовки"),
@@ -137,19 +190,24 @@ def _choose(policy: str, stage: str, body: Body, room: Room,
         # These are rough beliefs for a planned 2-hour walk, not an oracle.
         estimated_trip_h = 2.0 if stage == "morning" else 1.5
         saved_core = gear.wetness * BELIEVED_DRY_ADVANTAGE_C_PER_H * estimated_trip_h
+        saved_stamina = gear.wetness * WET_EXTRA_STAMINA_PER_H * estimated_trip_h
+        saved_pace_fraction = 1.0 - gear.movement_stability(wind=0.2, exposure=0.9)
         scarce_fuel = 0.8 if room.fuel <= 2.0 else 0.25
         drying_cost = DRY_H * scarce_fuel + 0.3  # hours unavailable for exploring
         cold_urgency = max(0.0, 36.0 - body.core_c)
         scores = {
             EXPLORE: 1.5 + (1.0 if room.fuel < 2.5 else 0.0),
-            DRY: saved_core + 0.5 * cold_urgency - drying_cost,
+            DRY: saved_core + saved_stamina * 0.05 +
+                 saved_pace_fraction * 3.0 + 0.5 * cold_urgency - drying_cost,
             WATER: 1.0 if gear.raw_water > 0 else -1.0,
             REST: 0.4 + cold_urgency,
         }
         selected = max(available, key=lambda label: (scores[label], label))
         return selected, (
-            f"оценка ценности сухой одежды: до {saved_core:.2f}°C меньших "
-            f"потерь на будущей вылазке; цена сушки {drying_cost:.2f}; "
+            f"оценка сухой одежды: до {saved_core:.2f}°C меньше потерь тепла, "
+            f"до {saved_stamina:.1f} больше сохранённой стамины, "
+            f"стабильность темпа +{saved_pace_fraction:.1%}; "
+            f"цена сушки {drying_cost:.2f}; "
             f"выбрано {selected} при ограниченных дровах"
         )
     # Scripted comparator after return: prepare an outstanding need once.
@@ -186,12 +244,21 @@ def run(seed: int, variant: str = "B_readable", profile: str = "local",
     deposited = 0
     searched = False
     log = []
+    walking_costs = {
+        "stamina_demand": 0.0, "extra_fatigue": 0.0,
+        "walked_h": 0.0, "minimum_stamina": body.stamina,
+        "wet_pace_delay_min": 0.0,
+    }
 
     def decision(stage: str) -> str:
         cues = [
             f"тело: {body.core_c:.2f} °C",
             f"ощущается в убежище: {room.felt_c(world.air_temp_c):.2f} °C",
             f"мокрота одежды: {gear.wetness:.2f}",
+            f"изоляция одежды: {gear.clothing_c:.2f}°C защиты",
+            f"стамина: {body.stamina:.1f}/100",
+            f"затраты стамины на ходьбу: {gear.walk_stamina_per_h:.1f}/ч",
+            f"стабильность темпа: {gear.movement_stability(wind=0.2, exposure=0.9):.3f}",
             f"топливо: {room.fuel:.3f}",
             f"вода сырая/подготовленная: {gear.raw_water}/{gear.safe_water}",
             f"время: {clock(world.dawn_min + body.elapsed_minutes)}",
@@ -249,9 +316,16 @@ def run(seed: int, variant: str = "B_readable", profile: str = "local",
         # A single known house: one real edge + search, physically paid for;
         # no teleport and no "loot appears in the shelter" on early stop.
         travelled = world.edge("home","house_a")
-        outbound = world.travel_minutes(travelled, world.dawn_min + body.elapsed_minutes, weather)
+        base_outbound = world.travel_minutes(travelled, world.dawn_min + body.elapsed_minutes, weather)
+        outward_stability = gear.movement_stability(
+            wind=weather.wind(world.dawn_min + body.elapsed_minutes),
+            exposure=travelled.exposure
+        )
+        outbound = base_outbound / outward_stability
         actual = _advance(body, room, world, gear, outbound,
-                          at_home=False, exposure=travelled.exposure, weather=weather)
+                          at_home=False, exposure=travelled.exposure,
+                          weather=weather, travelling=True, walking_costs=walking_costs)
+        walking_costs["wet_pace_delay_min"] += actual * (1.0 - outward_stability)
         if not body.terminal and actual >= outbound - 1e-6:
             searched_minutes = _advance(body, room, world, gear, SEARCH_H*60,
                      at_home=False, exposure=0.35, weather=weather)
@@ -263,12 +337,21 @@ def run(seed: int, variant: str = "B_readable", profile: str = "local",
                 agent.beliefs.loot["house_a"] = max(
                     0.0, agent.beliefs.loot.get("house_a",0) - carried
                 )
-                return_trip = world.travel_minutes(
+                base_return = world.travel_minutes(
                     travelled, world.dawn_min + body.elapsed_minutes, weather
                 )
+                return_stability = gear.movement_stability(
+                    wind=weather.wind(world.dawn_min + body.elapsed_minutes),
+                    exposure=travelled.exposure
+                )
+                return_trip = base_return / return_stability
                 home_minutes = _advance(body, room, world, gear, return_trip,
                                  at_home=False, exposure=travelled.exposure,
-                                 weather=weather)
+                                 weather=weather, travelling=True,
+                                 walking_costs=walking_costs)
+                walking_costs["wet_pace_delay_min"] += home_minutes * (
+                    1.0 - return_stability
+                )
                 if not body.terminal and home_minutes >= return_trip - 1e-6:
                     deposited = carried
                     room.fuel += carried
@@ -319,6 +402,16 @@ def run(seed: int, variant: str = "B_readable", profile: str = "local",
         "fuel_at_dusk": round(fuel_at_dusk,4),
         "fuel_final": round(room.fuel,4),
         "fuel_burned": round(room.burned_fuel_total,5),
+        "walking_stamina_demand": round(walking_costs["stamina_demand"],5),
+        "walking_extra_fatigue": round(walking_costs["extra_fatigue"],5),
+        "walking_hours": round(walking_costs["walked_h"],6),
+        "minimum_walking_stamina": round(walking_costs["minimum_stamina"],5),
+        "wet_pace_delay_minutes": round(walking_costs["wet_pace_delay_min"],6),
+        "movement_stability_final": round(gear.movement_stability(
+            wind=0.2, exposure=0.9),6),
+        "stamina_at_dusk": round(body.stamina,5),
+        "fatigue_at_dusk": round(body.fatigue,5),
+        "stamina_final": round(body.stamina,5),
         "core_at_dusk": round(core_at_dusk,4),
         "core_final": round(body.core_c,4),
         "elapsed_minutes": round(body.elapsed_minutes,6),
@@ -331,6 +424,8 @@ def run(seed: int, variant: str = "B_readable", profile: str = "local",
             "One day+night bounded greybox; NOT the authoritative multi-day survival loop.",
             "No water deprivation penalty; safe water is an optional preparation goal.",
             "Wetness is initial condition, no weather-driven soaking or layered clothing yet.",
+            "Stamina drains on active walks; indoor recovery still uses canonical Body.",
+            "Movement stability is a small deterministic travel-time proxy, not animation, slip or handling simulation.",
             "Spark/ignition availability held constant, no matches inventory in this experiment.",
             "Exploration is one 60-min search of a known house, not a human-controlled map.",
             "Dry clothing is a physical protection advantage, not an obligatory goal.",
