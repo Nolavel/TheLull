@@ -235,7 +235,7 @@ def study(seeds: int = 12,days: int = 3)->dict:
                     "time_only_control":cont["time_only_control_pressure"],
                     "night_actual":{
                         "wakes":day["night"]["woke_cold"],
-                        "fuel_burned":day["fuel_burned_today"],
+                        "fuel_burned":cont["night_actual_fuel_spent"],
                         "core_before":cont["before_night"]["cues"]["core_c"],
                         "core_after":cont["after_night"]["cues"]["core_c"],
                     },
