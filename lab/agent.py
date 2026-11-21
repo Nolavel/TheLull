@@ -6,6 +6,7 @@ safety margin, plan changes and how often the plan survives contact with the wor
 from __future__ import annotations
 
 import heapq
+import math
 from dataclasses import dataclass, field
 
 from .world import WALK_SPEED_M_PER_MIN, Edge, World
@@ -72,6 +73,55 @@ class Beliefs:
     wet_walk_stamina_per_h_est: float = 16.0
     wet_walk_core_loss_per_h_est: float = 0.7
     wet_walk_samples: int = 0
+    # An explicit prediction error is an actor observation. Not a reward,
+    # not a known dry-clothing counterfactual, and not the world's hidden data.
+    # key = traversed directed route string, value = most recent *signed* errors.
+    trip_prediction_errors: dict[str, dict[str, float]] = field(default_factory=dict)
+
+    def observe_trip_prediction(
+        self, route: str, *, predicted_minutes: float, actual_minutes: float,
+        predicted_stamina_demand: float, actual_stamina_demand: float,
+        predicted_core_loss: float, actual_core_loss: float,
+    ) -> str:
+        """Compare a stored BEFORE-action estimate with an observed return.
+
+        A failed/unfinished trip is not accepted as if the full route occurred.
+        Caller must require a complete observed return. Signed errors preserve
+        over-optimistic and over-pessimistic forecasts instead of hiding misses.
+        """
+        if not route:
+            raise ValueError("route must be the observed route")
+        fields = (predicted_minutes, actual_minutes,
+                  predicted_stamina_demand, actual_stamina_demand,
+                  predicted_core_loss, actual_core_loss)
+        if not all(math.isfinite(x) for x in fields):
+            raise ValueError("forecast/observation must be finite")
+        if (predicted_minutes <= 0 or actual_minutes <= 0 or
+            predicted_stamina_demand < 0 or actual_stamina_demand < 0 or
+            predicted_core_loss < 0 or actual_core_loss < 0):
+            raise ValueError("forecast/observation must have physical bounds")
+        previous = self.trip_prediction_errors.get(route)
+        sample = (int(previous["samples"]) + 1) if previous else 1
+        errors = {
+            "minutes": actual_minutes - predicted_minutes,
+            "stamina": actual_stamina_demand - predicted_stamina_demand,
+            "core": actual_core_loss - predicted_core_loss,
+        }
+        self.trip_prediction_errors[route] = {
+            "minutes": errors["minutes"],
+            "stamina": errors["stamina"],
+            "core": errors["core"],
+            "samples": float(sample),
+        }
+        return (
+            f"сверил прогноз с опытом на {route}: "
+            f"минуты {predicted_minutes:.1f}→{actual_minutes:.1f} "
+            f"(ошибка {errors['minutes']:+.1f}); "
+            f"расход stamina {predicted_stamina_demand:.1f}→{actual_stamina_demand:.1f} "
+            f"(ошибка {errors['stamina']:+.1f}); "
+            f"потери core {predicted_core_loss:.2f}→{actual_core_loss:.2f} "
+            f"(ошибка {errors['core']:+.2f})"
+        )
 
     def observe_wet_walk(self, *, hours: float, stamina_demand: float,
                          core_before: float, core_after: float) -> str:
