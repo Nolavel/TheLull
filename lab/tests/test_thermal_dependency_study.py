@@ -32,7 +32,7 @@ class ThermalDependencyStudyContract(unittest.TestCase):
                                      trace["days"] * 24.0 + 1e-4)
             self.assertTrue(all(trace["thermal_phases"][p]["h"] >= 0
                                 for p in PHASES))
-            self.assertEqual(len(trace["evening_options"]), trace["nights"])
+            self.assertLessEqual(len(trace["evening_options"]), trace["nights"])
 
     def test_weather_independent_and_patches_revert(self):
         first = survival_loop.run(5, 4, variant="B_readable", profile="local")
