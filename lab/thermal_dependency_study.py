@@ -26,11 +26,13 @@ PROFILES = ("novice", "local")
 ARMS = (
     "baseline",
     "day_outdoor_air_plus_6c",
+    "day_shelter_only_plus_6c",
     "night_only_air_plus_6c",
     "shelter_passive_plus_6c",
     "fire_heat_source_plus_6c",
     "fuel_burn_half",
     "body_cooling_half",
+    "night_fuel_target_14",  # trip planner expects the actual 14h burn, not 3
     "dusk_two_hours_later",  # day/night boundary changes together
 )
 PHASES = ("outside_trip", "shelter_day", "night")
@@ -95,7 +97,8 @@ def simulate(seed: int, variant: str, profile: str, arm: str = "baseline",
 
     def traced_day(person, room, outside, hours, asleep, fatigue_per_h=0.0):
         before = person.core_c
-        result = original_step_day(person, room, outside, hours, asleep,
+        day_temp = outside + (6.0 if arm == "day_shelter_only_plus_6c" else 0.0)
+        result = original_step_day(person, room, day_temp, hours, asleep,
                                    fatigue_per_h=fatigue_per_h)
         measure("shelter_day", person, before, hours)
         return result
@@ -160,9 +163,14 @@ def simulate(seed: int, variant: str, profile: str, arm: str = "baseline",
     def day_air(self, exposure, minute, weather):
         return original_felt(self, exposure, minute, weather) + 6.0
 
-    def dusk_shift(cls, name, chosen_variant):
+    def changed_world(cls, name, chosen_variant):
         world = original_load(cls, name, chosen_variant)
-        world.day_length += 120
+        if arm == "dusk_two_hours_later":
+            world.day_length += 120
+        elif arm == "night_fuel_target_14":
+            # This property is a daytime search/stock target in the connected
+            # loop, NOT Room's actual consumption rate.
+            world.fuel_per_night = 14
         return world
 
     with ExitStack() as stack:
@@ -189,8 +197,8 @@ def simulate(seed: int, variant: str, profile: str, arm: str = "baseline",
         elif arm == "body_cooling_half":
             stack.enter_context(patch.object(
                 physiology, "COOLING_COEF", physiology.COOLING_COEF / 2.0))
-        elif arm == "dusk_two_hours_later":
-            stack.enter_context(patch.object(World, "load", classmethod(dusk_shift)))
+        elif arm in ("dusk_two_hours_later", "night_fuel_target_14"):
+            stack.enter_context(patch.object(World, "load", classmethod(changed_world)))
         story = survival_loop.run(seed, days=days, variant=variant,
                                   profile=profile, recheck_policy=True)
 
@@ -216,6 +224,11 @@ def simulate(seed: int, variant: str, profile: str, arm: str = "baseline",
         "unused_world_stock": sum(last["remaining_loot"].values()) if last else 0,
         "search_minutes": sum(d["day_trip"]["search_minutes"] for d in trace),
         "trip_count": sum(bool(d["day_trip"]["went_out"]) for d in trace),
+        "stayed_with_insufficient_night_fuel": sum(
+            (not d["day_trip"]["went_out"]) and
+            d["fuel_at_departure"] >= 4.0 and d["fuel_at_departure"] < 14.0
+            for d in trace
+        ),
         "nights": len(trace),
         "sleep_h": sum(d["night"]["slept_hours"] for d in trace),
         "wake_events": sum(d["night"]["woke_cold"] for d in trace),
@@ -261,8 +274,16 @@ def analyze(seeds: int = 30, days: int = HORIZON) -> dict:
                     "mean_core_loss_c": _mean(
                         [{"v": x["thermal_phases"][phase]["lost_c"]} for x in group], "v"
                     ),
+                    "mean_core_loss_per_day_c": _mean(
+                        [{"v": x["thermal_phases"][phase]["lost_c"] / max(1, x["days"])}
+                         for x in group], "v"
+                    ),
                     "mean_core_gain_c": _mean(
                         [{"v": x["thermal_phases"][phase]["gained_c"]} for x in group], "v"
+                    ),
+                    "mean_core_gain_per_day_c": _mean(
+                        [{"v": x["thermal_phases"][phase]["gained_c"] / max(1, x["days"])}
+                         for x in group], "v"
                     ),
                     "mean_floor_hours": _mean(
                         [{"v": x["thermal_phases"][phase]["at_temperature_floor_h"]}
@@ -275,6 +296,9 @@ def analyze(seeds: int = 30, days: int = HORIZON) -> dict:
                 "mean_days": _mean(group, "days"),
                 "mean_first_morning_core_c": _mean(group, "first_dawn_end_core_c"),
                 "mean_fuel_found": _mean(group, "real_fuel_collected"),
+                "mean_stays_with_insufficient_night_fuel": _mean(
+                    group, "stayed_with_insufficient_night_fuel"
+                ),
                 "mean_unused_world_stock": _mean(group, "unused_world_stock"),
                 "mean_sleep_h": _mean(group, "sleep_h"),
                 "mean_wakes": _mean(group, "wake_events"),
@@ -314,7 +338,7 @@ def analyze(seeds: int = 30, days: int = HORIZON) -> dict:
             )
             mismatches += mismatch_days
             ledger_violations += x["ledger_error"] > 0.001
-            extra_night += x["nights"] != x["days"]
+            extra_night += len(x["evening_options"]) != x["nights"]
     return {
         "design": {
             "kind": "paired one-factor interventions + coupled dusk-shift reference",
@@ -324,6 +348,7 @@ def analyze(seeds: int = 30, days: int = HORIZON) -> dict:
             "registered_arms": ARMS,
             "constant_rules": "canonical survival_loop, unchanged real loot and core start",
             "dusk_note": "dusk +2h extends daylight and shortens night; false-signal timing may also shift",
+            "threshold_note": "fuel_per_night=14 affects only daytime trip threshold/next-intention, never Room fuel burn",
         },
         "by_variant": stats,
         "checks": {
@@ -339,6 +364,8 @@ def analyze(seeds: int = 30, days: int = HORIZON) -> dict:
             "More than one viable forecast is necessary but not sufficient for meaningful player choice.",
             "Dusk change is coupled with longer daylight and altered false-sign timing.",
             "Randomized loot draws are sequential; trajectories can diverge after choice changes.",
+            "Day-shelter and night-only heat +6 are diagnostic unrealistically free thermal protections.",
+            "Only baseline phase sums are comparable over identical horizon; use per-day phase rates when durations differ.",
             "No human playtest, game fun metric, Unreal runtime, real-world physiological claim.",
         ],
     }
