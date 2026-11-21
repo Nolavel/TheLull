@@ -58,7 +58,10 @@ def simulate(seed: int, variant: str, profile: str, arm: str = "baseline",
     original_play = survival_loop.play
     original_felt = World.felt_outdoors_c
     original_load = World.load.__func__
-    tracker = {"body": None, "room": None}
+    tracker = {"body": None, "room": None,
+               "ever_hit_temperature_floor": False,
+               "post_floor_rewarming_steps": 0,
+               "first_floor_phase": None}
     segments = {p: {"h": 0.0, "lost_c": 0.0, "gained_c": 0.0,
                     "at_temperature_floor_h": 0.0, "burned_fuel": 0.0,
                     "fire_hours": 0.0} for p in PHASES}
@@ -78,6 +81,13 @@ def simulate(seed: int, variant: str, profile: str, arm: str = "baseline",
         if not record or person is not tracker["body"]:
             return
         delta = person.core_c - old_core
+        if old_core > physiology.DEATH_C + 1e-7 and person.core_c <= physiology.DEATH_C + 1e-7:
+            tracker["ever_hit_temperature_floor"] = True
+            if tracker["first_floor_phase"] is None:
+                tracker["first_floor_phase"] = phase
+        elif (tracker["ever_hit_temperature_floor"] and
+              old_core <= physiology.DEATH_C + 1e-7 and delta > 1e-8):
+            tracker["post_floor_rewarming_steps"] += 1
         metric = segments[phase]
         metric["h"] += hours
         if delta < 0:
@@ -224,6 +234,9 @@ def simulate(seed: int, variant: str, profile: str, arm: str = "baseline",
         "unused_world_stock": sum(last["remaining_loot"].values()) if last else 0,
         "search_minutes": sum(d["day_trip"]["search_minutes"] for d in trace),
         "trip_count": sum(bool(d["day_trip"]["went_out"]) for d in trace),
+        "ever_hit_temperature_floor": tracker["ever_hit_temperature_floor"],
+        "post_floor_rewarming_steps": tracker["post_floor_rewarming_steps"],
+        "first_floor_phase": tracker["first_floor_phase"],
         "stayed_with_insufficient_night_fuel": sum(
             (not d["day_trip"]["went_out"]) and
             d["fuel_at_departure"] >= 4.0 and d["fuel_at_departure"] < 14.0
@@ -295,6 +308,11 @@ def analyze(seeds: int = 30, days: int = HORIZON) -> dict:
                 "cases": len(group),
                 "mean_days": _mean(group, "days"),
                 "mean_first_morning_core_c": _mean(group, "first_dawn_end_core_c"),
+                "runs_ever_hitting_temperature_floor": sum(x["ever_hit_temperature_floor"] for x in group),
+                "runs_rewarming_after_floor": sum(x["post_floor_rewarming_steps"] > 0 for x in group),
+                "first_floor_phases": dict(sorted(Counter(
+                    x["first_floor_phase"] or "never" for x in group
+                ).items())),
                 "mean_fuel_found": _mean(group, "real_fuel_collected"),
                 "mean_stays_with_insufficient_night_fuel": _mean(
                     group, "stayed_with_insufficient_night_fuel"
@@ -319,6 +337,14 @@ def analyze(seeds: int = 30, days: int = HORIZON) -> dict:
                     sum(c["forecast_viable"] >= 1 for c in available) /
                     len(available), 4
                 ) if available else 0,
+                "first_evening_with_any_viable_forecast": round(
+                    sum(x["evening_options"][0]["forecast_viable"] >= 1 for x in group) /
+                    len(group), 4
+                ),
+                "first_evening_with_multiple_viable_forecasts": round(
+                    sum(x["evening_options"][0]["forecast_viable"] >= 2 for x in group) /
+                    len(group), 4
+                ),
                 "end_reasons": dict(sorted(endings.items())),
                 "vs_baseline_count": dict(sorted(changes.items())),
                 "phases": ledger,
@@ -361,6 +387,7 @@ def analyze(seeds: int = 30, days: int = HORIZON) -> dict:
             "Days completed is a capped count; 7-day horizon is right-censored.",
             "Day/night exposures are compared by phase, not inferred from one global mean.",
             "Counterfactual forecast viability uses the AGENT's own prediction, not the real next-day outcome.",
+            "Temperature floor (28.8C) is a cap; run termination is evaluated only after the night. Floor hits and later rewarming are measured as potential continuity defects.",
             "More than one viable forecast is necessary but not sufficient for meaningful player choice.",
             "Dusk change is coupled with longer daylight and altered false-sign timing.",
             "Randomized loot draws are sequential; trajectories can diverge after choice changes.",
@@ -388,6 +415,10 @@ def main() -> None:
             "mean_night_fire_h": z["mean_night_fire_h"],
             "fraction_evenings_with_any_viable_option":
                 z["fraction_evenings_with_any_viable_option"],
+            "first_evening_with_any_viable_forecast":
+                z["first_evening_with_any_viable_forecast"],
+            "runs_rewarming_after_floor": z["runs_rewarming_after_floor"],
+            "first_floor_phases": z["first_floor_phases"],
             "vs_baseline_count": z["vs_baseline_count"],
             "end_reasons": z["end_reasons"],
             "phases": z["phases"],
