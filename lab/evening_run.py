@@ -165,12 +165,12 @@ def play(option_label: str, outside_c: float, room: Room, body: Body, beliefs: E
                        else "нет доступного топлива или инструмента — остаётся бодрствовать")
                 wakes.append({"at": round(at, 1), "core_c": round(woke_at_c, 1), "did": why})
                 log.append(f"{at:4.1f} ч: проснулся от холода ({woke_at_c:.1f}°) — {why}")
-        # Refusing fire before bed must not lock the participant out of a
-        # later decision while awake. Re-offer after one ACTUAL hour, with
-        # the same observed state and physical clock.
+        # Saving fuel before bed must not permanently lock out later action.
+        # Re-offer after three REAL hours awake; a short text session should
+        # not become a prompt every 15 minutes. A future UI can re-open anytime.
         if (not asleep and not automatic_ignition and on_fire_opportunity is not None
                 and not room.fire_lit and room.fuel > 0
-                and slept + awake_h - last_awake_heat_offer_h >= 1.0 - 1e-8):
+                and slept + awake_h - last_awake_heat_offer_h >= 3.0 - 1e-8):
             on_fire_opportunity("night_awake", max(0.25, night_hours - slept - awake_h))
             last_awake_heat_offer_h = slept + awake_h
         if not asleep and body.core_c >= WAKE_COLD_C + 0.4 and sleep_refusal(room, body, outside_c) is None:
