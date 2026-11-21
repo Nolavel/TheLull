@@ -126,7 +126,14 @@ def restore_outcome(row: dict, world: World) -> tuple[Body, Room]:
                 stamina=row["stamina_after_route"],
                 fatigue=row["fatigue_after_route"],
                 elapsed_minutes=row["elapsed_minutes"])
-    room = Room(fuel=row["fuel_remaining"],fire_lit=False)
+    room = Room(
+        fuel=row["fuel_remaining"],
+        fire_lit=row["room_fire_lit_after_route"],
+        heated_offset_c=row["room_heat_offset_after_route_c"],
+        burned_fuel_total=row["fuel_burned"],
+        fire_hours_total=row["room_fire_hours_total"],
+        furniture=0,
+    )
     return body,room
 
 
@@ -187,8 +194,12 @@ def analyse_case(seed: int, variant: str, multiplier: int,
         # Availability and voluntary deferral are exposed separately.
         can_do_now = body.stamina >= WORK_START_STAMINA
         deferred_body,deferred_room = restore_outcome(row,world)
-        defer = followup_work(deferred_body,deferred_room,world,rest_if_tired=False)
-        action = followup_work(body,work_room,world,rest_if_tired=True)
+        clothes = Equipment(wetness=row["wetness_after_preparation"])
+        defer = followup_work(deferred_body,deferred_room,world,
+                              rest_if_tired=False, gear=clothes)
+        action = followup_work(body,work_room,world,
+                               rest_if_tired=True,
+                               gear=Equipment(wetness=row["wetness_after_preparation"]))
         followups[arm] = {
             "possible":True,"can_work_without_rest":can_do_now,
             "state_before":before,"defer_option":defer,
@@ -196,7 +207,10 @@ def analyse_case(seed: int, variant: str, multiplier: int,
             "state_after":{"core_c":round(body.core_c,5),
                            "stamina":round(body.stamina,5),
                            "elapsed_minutes":round(body.elapsed_minutes,5)},
+            "fuel_before":row["fuel_remaining"],
             "fuel_after":round(work_room.fuel,5),
+            "burned_fuel_after":round(work_room.burned_fuel_total,5),
+            "wetness_at_followup":row["wetness_after_preparation"],
         }
     return {
         "case":{"seed":seed,"variant":variant,"multiplier":multiplier,
@@ -258,6 +272,9 @@ def study(seeds: int = 30) -> dict:
                             checks["free_time"]+=1
                         if work["state_after"]["stamina"] < -1e-7:
                             checks["negative_stamina"]+=1
+                        if (work["fuel_before"] < work["fuel_after"] - .001
+                            or work["burned_fuel_after"] < -1e-7):
+                            checks["free_fuel"]+=1
                     prep=row["post_trip_second_action"]["prepared_all"]
                     nostam=row["post_trip_second_action"]["prepared_no_stamina"]
                     if prep["possible"] and nostam["possible"]:
@@ -276,12 +293,12 @@ def study(seeds: int = 30) -> dict:
         "counts":dict(counts),
         "checks":{k:checks[k] for k in (
             "unobserved_edge","missing_alternative","lost_observation",
-            "free_time","negative_stamina"
+            "free_time","negative_stamina","free_fuel"
         )},
         "examples":examples,
         "limits":[
             "Second decision compares SAME original Body/Room with updated beliefs; it is not a simulated next dawn.",
-            "The physically continued after-trip task uses the same body/time but is a separate action-choice probe, not a 2-day playthrough.",
+            "The physically continued after-trip task restores observed room heat/fire/fuel and actual garment wetness, but is a separate action-choice probe, not a 2-day playthrough.",
             "One training trip is deliberately wet; subsequent preparation remains voluntary, with no dry counterfactual disclosed to Agent.",
             "The heavy work stamina readiness threshold is a prototype task constraint, not a global mobility exhaustion penalty.",
             "The route is artificially lengthened 1/8/24/40x only for laboratory sensitivity.",
