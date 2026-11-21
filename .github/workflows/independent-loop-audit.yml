@@ -1,11 +1,11 @@
-# Read-only candidate gate: do NOT write to Claude's or Codex's branch.
-# This job is expected to be red until their owned systems are integrated.
+# Read-only candidate gate; examine shared world/body/night runtime independently.
 name: independent-loop-audit
 
 on:
   push:
     branches:
       - production
+      - ue-codex
     paths:
       - "lab/**"
       - "tools/audit/**"
@@ -13,9 +13,9 @@ on:
   workflow_dispatch:
     inputs:
       candidate_ref:
-        description: "GitHub ref with candidate world/evening code (e.g. ue-claudeflow or production)"
+        description: "Ref to audit (default: branch that triggered the workflow)"
         required: false
-        default: "ue-claudeflow"
+        default: "ue-codex"
 
 permissions:
   contents: read
@@ -27,12 +27,12 @@ jobs:
       - name: Fetch published auditor
         uses: actions/checkout@v4
         with:
-          ref: production
+          ref: ${{ github.ref_name }}
           path: auditor
       - name: Fetch candidate code (read-only)
         uses: actions/checkout@v4
         with:
-          ref: ${{ inputs.candidate_ref || 'ue-claudeflow' }}
+          ref: ${{ inputs.candidate_ref || github.ref_name }}
           path: candidate
       - uses: actions/setup-python@v5
         with:
@@ -61,8 +61,8 @@ jobs:
               details = row["evidence"].replace("|", "\\|").replace("\n", " ")
               print(f"| {row['contract']} | {row['status']} | {details} |")
           print("\n### Observed run endings\n")
-          print(result["metrics"]["run_end_reasons"])
-          print("\n**Red means incomplete integration, not a failed Python unit suite.**")
+          print(result["metrics"]["end_reasons"])
+          print("\n**Research signals are non-blocking; invariant violations fail the gate.**")
           PY
       - name: Persist auditable evidence
         if: always()
