@@ -49,7 +49,8 @@ def make_world(variant: str, multiplier: int) -> World:
 
 
 def choose_clothing(agent: Agent, body: Body, room: Room, gear: Equipment,
-                    *, assume_storm: bool = False) -> Decision:
+                    *, assume_storm: bool = False,
+                    consider_prediction_error: bool = False) -> Decision:
     """A decision from subjective route beliefs, not the real route or weather."""
     # This study commits to the SINGLE direct edge used by the physical
     # counterfactual. Calling Agent.path() could choose a shorter detour,
@@ -85,6 +86,19 @@ def choose_clothing(agent: Agent, body: Body, room: Room, gear: Equipment,
         + anticipated_saved_minutes * 0.02
         + (0.55 if avoid_rest else 0.0)
     )
+    # D1.6 opt-in: a positive error is an uncertain safety warning, not
+    # proof that *dry* would have saved the last trip. Preserve negative
+    # errors and zero observations; never peek at researcher dry results.
+    surprise_score = 0.0
+    route_id = "home→house_a→home"
+    error = agent.beliefs.trip_prediction_errors.get(route_id)
+    if consider_prediction_error and error is not None:
+        surprise_score = gear.wetness * (
+            0.50 * max(0.0, error["core"])
+            + 0.07 * max(0.0, error["stamina"])
+            + 0.015 * max(0.0, error["minutes"])
+        )
+        expected_benefit += surprise_score
     # Time+fuel have competing uses. Not scaled to guarantee a win.
     fuel_scarcity = 0.4 if room.fuel <= 2 else 0.3
     expected_cost = DRY_TIME_H*0.80 + DRY_FUEL*fuel_scarcity
@@ -113,6 +127,7 @@ def choose_clothing(agent: Agent, body: Body, room: Room, gear: Equipment,
             f"тело: {body.core_c:.2f}°C, stamina: {body.stamina:.1f}",
             f"одежда мокрота: {gear.wetness:.2f}, топливо: {room.fuel:.2f}",
             f"прошлых наблюдений мокрой ходьбы: {agent.beliefs.wet_walk_samples}",
+            f"зарегистрированных ошибок прогноза: {int(error['samples']) if error else 0}",
             f"предстоящая работа требует {WORK_START_STAMINA:.0f} stamina",
         ],
         alternatives=alternatives,
@@ -123,6 +138,8 @@ def choose_clothing(agent: Agent, body: Body, room: Room, gear: Equipment,
                 f"ожидаемый выигрыш тепла {anticipated_avoided_core:.2f}°C, "
                 f"стамины {anticipated_saved_stamina:.2f}, "
                 f"ходьбы {anticipated_saved_minutes:.2f} мин; "
+                f"добавочная страховка от пережитой ошибки: {surprise_score:.2f} "
+                f"(включена: {consider_prediction_error}); "
                 f"отдых перед работой вероятно сэкономлен: {avoid_rest}"),
     )
 
