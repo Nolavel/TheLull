@@ -24,7 +24,7 @@ from .coupled_microloop import (
     Equipment, _advance, _choose,
 )
 from .evening import Room
-from .world import Edge, World
+from .world import DayWeather, Edge, World
 
 VARIANTS = ("A_safe", "B_readable", "C_unreadable")
 DISTANCE_MULTIPLIERS = (1, 8, 24, 40)
@@ -62,12 +62,14 @@ class AblatedEquipment(Equipment):
         )
 
 
-def evaluate(seed: int, variant: str, multiplier: int) -> dict:
+def evaluate(seed: int, variant: str, multiplier: int,
+             *, weather_override: DayWeather | None = None) -> dict:
     """Seven paired outcomes, with all exogenous variables held fixed."""
     if multiplier not in DISTANCE_MULTIPLIERS:
         raise ValueError("unregistered route length")
     world = World.load("district_v0", variant)
-    weather = world.roll_weather(random.Random(f"{seed}:weather:1"))
+    weather = (weather_override if weather_override is not None else
+               world.roll_weather(random.Random(f"{seed}:weather:1")))
     reference = world.edge("home", "house_a")
     # Same mapped edge, stretched only for a CONTROLLED route-length probe;
     # this is not a claim that the actual building is 8 km away.
