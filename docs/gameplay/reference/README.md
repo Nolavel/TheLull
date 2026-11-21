@@ -6,6 +6,8 @@
 
 ## Начинать здесь
 
+**Первая практическая точка входа для UE:** [SURVIVAL_FOUNDATION_00_TO_UE.md](SURVIVAL_FOUNDATION_00_TO_UE.md) — исследование фундамента TLD + фактического кода Hoarbound + архитектуры Ки-Уэста, собственники Blueprint-переменных, первый граф действия, критерии проверки; **не** перенос lab-баланса и **не** созданный `.uasset`.
+
 1. [CORE_MECHANICS.md](CORE_MECHANICS.md) — как реально работают ключевые механики Survival Mode и что в них наблюдаемо.
 2. [SYSTEM_COUPLINGS.md](SYSTEM_COUPLINGS.md) — зависимости и последствия между механиками: главная часть референса.
 3. [TRANSLATION_TO_THELULL.md](TRANSLATION_TO_THELULL.md) — что сохранять, где нужны собственные решения и какие сквозные сценарии проверять.
