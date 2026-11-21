@@ -11,7 +11,7 @@ import json
 import random
 from typing import Callable
 from collections import Counter
-from dataclasses import asdict
+from dataclasses import asdict, replace
 from statistics import mean
 
 from .agent import Agent
@@ -81,12 +81,15 @@ def run(seed: int, days: int = 3, *, variant: str = "B_readable",
         carry_night_intent: bool = False,
         goal_policy: str | None = None,
         initial_goal: str = FUEL,
-        work_deadline_minute: float = 2880.0) -> dict:
+        work_deadline_minute: float = 2880.0,
+        initial_fuel: float | None = None) -> dict:
     """Advance one shared state. Partial days are NOT credited as dawns."""
     if days < 1:
         raise ValueError("days must be positive")
     if initial_furniture < 0:
         raise ValueError("furniture must be non-negative")
+    if initial_fuel is not None and initial_fuel < 0:
+        raise ValueError("initial fuel must be nonnegative")
     if heating_policy not in (*HEATING_POLICIES, "agent"):
         raise ValueError(f"unknown heating policy: {heating_policy}")
     if decision_provider is not None and heating_policy != "agent":
@@ -102,7 +105,8 @@ def run(seed: int, days: int = 3, *, variant: str = "B_readable",
     world = World.load("district_v0", variant)
     agent = Agent(profile, world, allow_rechecks=recheck_policy)
     body = Body()
-    room = Room(fuel=world.start_fuel, furniture=initial_furniture)
+    room = Room(fuel=world.start_fuel if initial_fuel is None else initial_fuel,
+                furniture=initial_furniture)
     # Persistent dry equipment across actual days. The canonical outdoor
     # controller does not yet wet clothing; we do not pretend otherwise.
     gear = Equipment()
@@ -132,6 +136,7 @@ def run(seed: int, days: int = 3, *, variant: str = "B_readable",
         dawn_pressure = None
         work_action = None
         before_night_goal_pressure = None
+        before_night_snapshot = None
         after_night_goal_pressure = None
         overnight_goal_trace = None
         if goal_policy is not None and not body.terminal:
@@ -392,6 +397,10 @@ def run(seed: int, days: int = 3, *, variant: str = "B_readable",
                         body,room,world,pending_work=pending_work,
                         deadline_minute=work_deadline_minute
                     )
+                    # Frozen last-real-evening measurements, NOT a future
+                    # physical forecast. Only the clock will advance in
+                    # the strict time-only comparison.
+                    before_night_snapshot=(replace(body),replace(room))
                     night_args["clothing_c"]=gear.clothing_c
                 night = play(
                     proposed["option"], world.air_temp_c, room, body,
@@ -458,6 +467,14 @@ def run(seed: int, days: int = 3, *, variant: str = "B_readable",
                 deadline_minute=work_deadline_minute
             )
             after_goal=after_night_goal_pressure["goal"]
+            time_only_pressure=None
+            if before_night_snapshot is not None:
+                old_body,old_room=before_night_snapshot
+                old_body.elapsed_minutes=body.elapsed_minutes
+                time_only_pressure=goal_pressure(
+                    old_body,old_room,world,pending_work=pending_work,
+                    deadline_minute=work_deadline_minute
+                )
             def preview(next_goal):
                 return (choose_morning(next_goal,body,room,agent,world,
                                        pending_work=pending_work,
@@ -469,6 +486,9 @@ def run(seed: int, days: int = 3, *, variant: str = "B_readable",
                 before_night_goal_pressure["goal"]
                 if before_night_goal_pressure is not None else None
             )
+            time_only_next=preview(
+                time_only_pressure["goal"] if time_only_pressure else None
+            )
             overnight_goal_trace={
                 "policy":goal_policy,
                 "assigned_initial_goal":initial_goal,
@@ -477,6 +497,12 @@ def run(seed: int, days: int = 3, *, variant: str = "B_readable",
                 "work_action":work_action,
                 "before_night":before_night_goal_pressure,
                 "after_night":after_night_goal_pressure,
+                "time_only_control_pressure":time_only_pressure,
+                "physical_night_changed_pressure":bool(
+                    time_only_pressure is not None
+                    and after_goal is not None
+                    and time_only_pressure["goal"]!=after_goal
+                ),
                 "changed_pressure_during_night":bool(
                     before_night_goal_pressure is not None
                     and before_night_goal_pressure["goal"]!=after_goal
@@ -485,10 +511,14 @@ def run(seed: int, days: int = 3, *, variant: str = "B_readable",
                 "next_dawn_adaptive_preview":chosen_next,
                 "next_dawn_frozen_preview":frozen_next,
                 "next_dawn_pre_night_pressure_preview":pressure_control_next,
+                "next_dawn_time_only_control_preview":time_only_next,
                 "next_goal_causal_reason":after_night_goal_pressure["reason"],
                 "night_observed_wakes":night["woke_cold"] if night else None,
                 "night_actual_fuel_spent":round(
-                    room.burned_fuel_total-fuel_burned_at_dawn,5
+                    room.burned_fuel_total-
+                    (before_night_snapshot[1].burned_fuel_total
+                     if before_night_snapshot is not None
+                     else room.burned_fuel_total),5
                 ),
                 "no_future_weather_used":True,
             }
@@ -611,6 +641,7 @@ def run(seed: int, days: int = 3, *, variant: str = "B_readable",
         "goal_policy":goal_policy,
         "assigned_initial_goal":initial_goal if goal_policy is not None else None,
         "pending_work_at_end":pending_work if goal_policy is not None else None,
+        "initial_fuel_override":initial_fuel,
         "decision_source": (
             "human" if decision_provider is not None
             else "agent" if heating_policy == "agent"
