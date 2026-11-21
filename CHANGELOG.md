@@ -7,6 +7,7 @@
 
 ## Unreleased
 
+<<<<<<< HEAD
 ### Changed (непрерывность: единые часы, тело, память и конец прогона)
 
 - `lab/body.py` (новый, владелец Claude): единое тело и единственная точка изменения температуры тела
@@ -22,6 +23,23 @@
 - `DEPART_MIN` оставлен устаревшим псевдонимом, чтобы не сломать `loop_bridge.py` Codex до его переноса.
 
 — Claude, `ue-claudeflow`
+=======
+### Decision (production: манифест, шаблон Third Person, квартал Key West, 21.11.2026)
+
+- Публикуем **только документацию**: [манифест](docs/gameplay/SURVIVAL_MANIFEST.md), [зеркальный UE-проект](docs/blueprints/project/README.md), атомарную сборку Claude Code через Unreal MCP и backlog. Python lab, CI и остальные изменения Codex в production не переносим этим коммитом.
+- **F−1:** штатный Epic Third Person Template (Blueprint, None) и [L_KeyWestBlockout](docs/blueprints/project/Content/Maps/L_KeyWestBlockout.md) по Hoarbound PR #340 (edbcf021). 727 не основной shelter. Bahama, Douglass, вышка, АЗС, несколько доступных укрытий; точные tower/gas IDs и ещё два кандидата проверить. Остальные здания — закрытые blockout-массы. F00 clock подключается после playable baseline на той же карте.
+- Структура трафаретов отражает реальные пути Content/Config; готовые штатные assets не дублировать. Пока только MD, Unreal MCP и PIE не проверены. Codex / production (целевой документальный пакет).
+
+
+### Added (independent-loop-audit: независимая проверка контракта)
+
+- Отдельные `tools/audit/thelull_contract_probe.py` и `.github/workflows/independent-loop-audit.yml` проверяют выбранную ветку без изменения файлов Claude/Codex. Протокол сохраняется в JSON/Actions; gate красный при нарушении межсистемного контракта, даже если unit-тесты зелёные.
+- [Проверка `ue-claudeflow@d583f39`](https://github.com/Nolavel/TheLull/actions/runs/44714270620): 54 unit-теста прошли; 4 независимых проверки пройдены, 11 межсистемных заблокированы до переноса Codex. Два исследовательских сигнала: все 180 прогонов завершились по трём ночам без огня; 14 из них при `core_c >= 35 °C`.
+- Результат и границы объяснения зафиксированы в `docs/gameplay/reference/LOOP_AUDIT.md`, переданы обоим владельцам через [AI talk #3](https://github.com/Nolavel/TheLull/issues/3#issuecomment-7036494542). Игровую реализацию агентов не изменяли.
+
+— ChatGPT, `production` (20.11.2026)
+
+>>>>>>> origin/production
 
 ### Added (сквозной аудит gameplay loop и референса The Long Dark)
 

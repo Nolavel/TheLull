@@ -3,6 +3,12 @@
 Действуют для любого агента (Claude, Codex, Grok и другие) и не зависят от конкретного MCP или инструмента.
 Где правило агента (`CLAUDE.md` и т. п.) расходится с этим файлом, главнее этот файл.
 
+## Обязательный survival-манифест и сборка (решение автора 21.11.2026)
+
+- Обязательное начало работы любого агента: [SURVIVAL_MANIFEST.md](docs/gameplay/SURVIVAL_MANIFEST.md). Грамматика TLD, фактические наработки Hoarbound, специфика Key West, собираемый UE-контракт и сквозная проверка. F−1: **Epic Third Person Template, Blueprint, Variant None**, штатные Character/camera/movement/input. Сначала [игровой квартал Key West](docs/blueprints/project/Content/Maps/L_KeyWestBlockout.md) по Hoarbound PR #340, а не пустая карта. 727 — ориентир/возможный shelter, не основной. Затем F00 clock и остальные системы. [Epic Third Person Template](https://dev.epicgames.com/documentation/en-us/unreal-engine/third-person-template-in-unreal-engine?application_version=5.8), выбрать 5.8 и проверить фактические пакеты, классы, пины в установленном UE 5.8.4.
+- [Текстовое зеркало проекта](docs/blueprints/project/README.md): один MD на один asset/config; совпадение с реальными Content/Config. Вложенные папки — наше соглашение, не требование UE; не дублировать штатные файлы шаблона и не плодить структуру впрок.
+- Claude Code в открытом UE через фактически доступный Unreal MCP: preflight, один asset, Compile/Save/inspect/PIE, expected vs actual, [BACKLOG](docs/blueprints/project/BACKLOG.md) в ue-claudeflow и handoff Codex. Неподдержанные операции — BLOCKED. Справка [Epic UE 5.8](https://dev.epicgames.com/documentation/en-us/unreal-engine?application_version=5.8) и [Blueprint API](https://dev.epicgames.com/documentation/en-us/unreal-engine/BlueprintAPI?application_version=5.8); проверить селектор версии и реальный hotfix 5.8.4. Не выдавать MD или Python за UE-реализацию.
+
 ## Ветки — строгое правило
 
 Один агент — одна постоянная ветка. Агенты никогда не делят рабочую ветку.
@@ -29,7 +35,7 @@
   Visual Studio и нет смысла в компиляции.
 - **Когда появится машина мощнее** — переходим в режим Remote (агент работает прямо на машине автора)
   и переписываем на C++ то, что этого требует по конкретной причине, а не ради самого C++.
-- Логика, написанная облачным агентом, передаётся **трафаретом** (`docs/blueprints/`), а не описанием
+- Логика, написанная облачным агентом, передаётся **трафаретом** ([`docs/blueprints/project/`](docs/blueprints/project/README.md)), а не описанием
   словами: трафарет воспроизводится в редакторе и сверяется с результатом.
 
 ## Commit и push

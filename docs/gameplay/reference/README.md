@@ -4,6 +4,8 @@
 Область: в первую очередь **Survival Mode** The Long Dark; не переносить автоматически Wintermute, Challenges и DLC.
 Авторское решение: The Long Dark — **первичный референс системного survival-геймплея TheLull**. Epic / ALIS — референсы реализации и архитектуры, не замена игровому референсу.
 
+**Обязательный манифест:** [SURVIVAL_MANIFEST.md](../SURVIVAL_MANIFEST.md). Практический старт — Epic Third Person Template + [L_KeyWestBlockout](../../blueprints/project/Content/Maps/L_KeyWestBlockout.md), затем [F00 foundation](SURVIVAL_FOUNDATION_00_TO_UE.md). 727 больше не главный shelter. [Зеркало трафаретов](../../blueprints/project/README.md).
+
 ## Начинать здесь
 
 1. [CORE_MECHANICS.md](CORE_MECHANICS.md) — как реально работают ключевые механики Survival Mode и что в них наблюдаемо.

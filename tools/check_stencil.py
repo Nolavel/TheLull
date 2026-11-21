@@ -30,8 +30,23 @@ def graph_block(text: str) -> list[str]:
     return out
 
 
+SHORT_CLASS = {"Actor": "/Script/Engine.Actor", "Pawn": "/Script/Engine.Pawn",
+               "Character": "/Script/Engine.Character", "ActorComponent": "/Script/Engine.ActorComponent",
+               "SceneComponent": "/Script/Engine.SceneComponent", "Object": "/Script/CoreUObject.Object",
+               "UserWidget": "/Script/UMG.UserWidget", "GameModeBase": "/Script/Engine.GameModeBase"}
+
+
+def normalise_class(value: str) -> str:
+    """A stencil may write `Actor`; rust-uasset prints `/Script/Engine.Actor`. Same class, one spelling."""
+    value = value.strip().strip("`")
+    return SHORT_CLASS.get(value, value)
+
+
 def fields(text: str) -> dict[str, str]:
-    return {k: v.strip() for k, v in FIELD.findall(text)}
+    out = {k: v.strip().strip("`") for k, v in FIELD.findall(text)}
+    if "ParentClass" in out:
+        out["ParentClass"] = normalise_class(out["ParentClass"])
+    return out
 
 
 def main() -> int:
