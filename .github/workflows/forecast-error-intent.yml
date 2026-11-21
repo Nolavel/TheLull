@@ -1,0 +1,61 @@
+name: forecast-error-intent
+
+on:
+  push:
+    branches: [ue-codex]
+    paths:
+      - "lab/**"
+      - ".github/workflows/forecast-error-intent.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  predicted-observed-next-intent:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Verify error memory and same-weather unforced choices
+        run: python3 -m unittest lab.tests.test_forecast_error_study -v
+      - name: Paired 3-policy forecast error study with unseen-weather evaluation
+        run: |
+          mkdir -p results
+          python3 -m lab.forecast_error_study --seeds 30 --json results/forecast-error.json | tee results/summary.json
+          python3 - <<'PY' | tee -a "$GITHUB_STEP_SUMMARY"
+          import json
+          r=json.load(open("results/forecast-error.json",encoding="utf-8"))
+          print("## D1.6 — forecast → observation → signed error → next decision")
+          print(f"Cases: {r['design']['cases']}; human participants: 0.")
+          print("Unfinished training cannot teach a complete route.")
+          print("The first wet trip is researcher-controlled. Learned decisions are matched at identical starting Body, Room and weather assumption.")
+          print("Held-out second weather is not disclosed to agent.")
+          print("### Choice and survival deltas")
+          for k,v in sorted(r["counts"].items()):
+              print(f"- {k}: {v}")
+          print("\n### Held-out policy outcomes, same physics")
+          print("| Policy | Eligible | Dry decisions | Returns | Heavy work completed | Required rest | Mean fuel | Mean elapsed h |")
+          print("|---|---:|---:|---:|---:|---:|---:|---:|")
+          for p,x in r["policy_outcomes_heldout"].items():
+              print(f"| {p} | {x['trials']} | {x['chose_dry']} | {x['returns']} | "
+                    f"{x['next_work_completed']} | {x['needed_rest']} | "
+                    f"{x['mean_fuel_burned']} | {x['mean_trip_elapsed_h']} |")
+          print("\n### Forecast error (actual-minus-predicted absolute error)")
+          for variant,x in r["forecast_absolute_errors_by_world"].items():
+              print(f"- {variant}: {x}")
+          print("\n### Strict feedback-only decision changes")
+          if not r["strict_transitions"]:
+              print("No switches; explicit negative result, not a failed test.")
+          for t in r["strict_transitions"]:
+              print(f"- {t['case']}: {t['choices']}, error: {t['error']}; ablation={t['ablation']}")
+          print("\nContract checks:",r["checks"])
+          assert all(x == 0 for x in r["checks"].values()),r["checks"]
+          PY
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: forecast-error-intent-json
+          path: results/
