@@ -1,0 +1,61 @@
+name: day-purpose-after-night
+
+on:
+  push:
+    branches: [ue-codex]
+    paths:
+      - "lab/**"
+      - ".github/workflows/day-purpose-after-night.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  real-lost-opportunity:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Task feasibility and real second-day accounting
+        run: python3 -m unittest lab.tests.test_day_purpose -v
+      - name: Paired physically paid purpose transitions
+        run: |
+          mkdir -p results
+          python3 -m lab.lost_opportunity_study --json results/day-purpose.json | tee results/summary.json
+          python3 - <<'PY' | tee -a "$GITHUB_STEP_SUMMARY"
+          import json
+          r=json.load(open("results/day-purpose.json",encoding="utf-8"))
+          c=r["counts"]
+          print("## D2.0 — did the lived night defeat the planned work?")
+          print("Researcher-set evening states: 288; same REAL night for both day policies.")
+          print(f"Actual reached first mornings: {c.get('real_mornings',0)}")
+          print(f"No real morning (terminal): {c.get('nights_without_next_dawn',0)}")
+          print(f"Physically lost job opportunity vs clock-only: {c.get('physically_lost_work_opportunity',0)}")
+          print(f"Physically gained job opportunity vs clock-only: {c.get('physically_gained_work_opportunity',0)}")
+          print(f"Work remained physically feasible: {c.get('work_remained_possible',0)}")
+          print(f"Changed PAID next-day action after loss: {c.get('lost_opportunity_changed_real_action',0)}")
+          print("\\n### All observed outcome counters")
+          for k,v in sorted(c.items()):
+              print(f"- {k}: {v}")
+          print("\\n### First concrete actions")
+          for p,a in r["first_action_by_policy"].items():
+              print(f"- {p}: {a}")
+          print("\\n### Physically lost-work examples")
+          for row in r["examples"][:5]:
+              x=row["input"];a=row["policies"]["opportunity"]
+              b=row["policies"]["continue_job"]
+              print(f"- {x}: previous job possible, actual blockers={row['actual_morning_job_opportunity']['blockers']}; "
+                    f"replanned={a['first_decision']['current_goal']} / {a['first_decision']['choice']}; "
+                    f"control={b['first_decision']['choice']}; "
+                    f"actual paid actions={[(i['choice'],i['actual_minutes']) for i in a['actions']]} ")
+          print("\\nContract checks:",r["checks"])
+          assert all(x==0 for x in r["checks"].values()),r["checks"]
+          PY
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: day-purpose-after-night-json
+          path: results/
