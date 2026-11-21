@@ -1,6 +1,6 @@
 # TheLull — cross-stencil self-audit before external review
 
-**Status: SELF-REVIEWED / NEEDS CLOUD REVIEW.** 21 November 2026. Scope: 14 active project targets (12 Content assets/level + 2 config files), plus the DEFERRED Key West level. All reviewed as one graph at the parent commit of this document. None exists as a real Unreal asset yet. No compile, PIE, local Editor or MCP capabilities verified.
+**Status: SELF-REVIEWED / NEEDS CLOUD REVIEW.** 21 November 2026. Scope: 17 active project targets (15 Content assets/level + 2 config files), plus the DEFERRED Key West level. All reviewed as one graph at the parent commit of this document. None exists as a real Unreal asset yet. No compile, PIE, local Editor or MCP capabilities verified.
 
 ## Target / dependency / consumer matrix
 
@@ -15,10 +15,13 @@
 | /Game/Tests/Survival/BP_F00ClockProbe | Clock, BPI, two enums, ST_SimStep, tags | Level (opt-in only) | NEEDS RE-REVIEW |
 | /Game/Survival/Environment/BP_CoreExposureZone | engine BoxCollision, stock Pawn collision | Body, Level | NEEDS REVIEW |
 | /Game/Survival/Body/ST_CoreVitals | project | Body, HUD, Debug | NEEDS REVIEW |
-| /Game/Survival/Body/BPC_SurvivalBody | ST_CoreVitals, ST_SimStep, BPI, E_SimPhase, Clock, Zone | Level, widgets via snapshot | NEEDS REVIEW |
+| /Game/Survival/Body/BPC_SurvivalBody | ST_CoreVitals, ST_SimStep, BPI, E_SimPhase, Clock, Zone | Level, BPC_CoreActions, widgets via snapshot | NEEDS RE-REVIEW |
+| /Game/Survival/Actions/ST_CoreSupplies | project | BPC_CoreActions, WBP_SurvivalDebug | NEEDS REVIEW |
+| /Game/Survival/Environment/BP_CoreRestSpot | engine Box Collision and stock Pawn | BPC_CoreActions, Level | NEEDS REVIEW |
+| /Game/Survival/Actions/BPC_CoreActions | Stock struct, RestSpot, Zone, Body, Clock, Advance enum, Gameplay Tags | Level and Debug via copies | NEEDS REVIEW |
 | /Game/UI/Survival/WBP_VitalsHUD | ST_CoreVitals, native UMG | Level | NEEDS REVIEW |
-| /Game/UI/Survival/WBP_SurvivalDebug | ST_CoreVitals, native UMG | Level | NEEDS REVIEW |
-| /Game/Maps/L_SurvivalCore | stock template, then Clock/Probe, Zone/Body, Widgets in stages | startup ini, PIE | NEEDS REVIEW |
+| /Game/UI/Survival/WBP_SurvivalDebug | ST_CoreVitals + ST_CoreSupplies, native UMG | Level | NEEDS RE-REVIEW |
+| /Game/Maps/L_SurvivalCore | stock template, then Clock/Probe, Zone/Body, Widgets, RestSpot/Actions in stages | startup ini, PIE | NEEDS RE-REVIEW |
 | Config/DefaultEngine.ini | L_SurvivalCore must exist first | project Maps & Modes startup | NEEDS REVIEW |
 | /Game/Maps/L_KeyWestBlockout | future Core integration + geography sources | later, not part of present build | DEFERRED |
 

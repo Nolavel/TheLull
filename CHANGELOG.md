@@ -7,6 +7,10 @@
 
 ## Unreleased
 
+### Added (finite paid core actions, 21.11.2026)
+
+- Added ST_CoreSupplies, BPC_CoreActions, BP_CoreRestSpot stencils. Drink/Eat pay the single clock then commit need + finite stock, Rest pays a 900s slice in spatially valid warm spot. Updated Body action recovery/rest mode, Debug stock/readouts, Level J/K/L, audit/backlog/research. Explicit stock is fixture only, not real inventory/SaveGame; UE/MCP/PIE not run, NEEDS REVIEW. Codex / ue-codex.
+
 ### Changed (production: cross-asset self-audit and F00 contracts, 21.11.2026)
 
 - Авторская задача: до независимого ревью самостоятельно перепроверены все 14 активных targets UE-mirror (12 Content, 2 Config) и отложенный Key West. Добавлены dependency matrix и Config/DefaultEngine.ini, E_AdvanceResult; согласованы BPI receiver bApplied, Clock Completed/Rejected/PartialFailure, Body, F00 probe, Level startup, UMG contracts и диагностические guards. Исправлены неверные имена полей в ST_CoreVitals и оставшийся bool-vs-enum вызов Probe.
