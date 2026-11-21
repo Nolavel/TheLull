@@ -18,36 +18,28 @@ nothing was tuned to make the three options come out even — if one dominates, 
 from __future__ import annotations
 
 import json
-from dataclasses import dataclass, field, replace
+from dataclasses import dataclass, replace
 
-HOURS_OF_NIGHT = 10.0
+from .agent import Beliefs
+from .body import (BASAL_HEAT_C, CLOTHING_INSULATION_C, COMFORT_C, COOLING_COEF,
+                   DEATH_C, HYPOTHERMIC_C, IDLE_FATIGUE_PER_H, RECOVERY_PER_H,
+                   REWARM_COEF, START_CORE_C, WAKE_COLD_C, Body, step_core, step_fatigue)
+
+# The default district is light 08:00-18:00 and dark the other 14h.
+# Integrated calls pass world.daylight_hours / world.night_hours explicitly.
+HOURS_OF_NIGHT = 14.0
 STEP_H = 0.25
-DAYLIGHT_H = 7.0  # scenario assumption, not a fixed rule for TheLull
+DAYLIGHT_H = 10.0
 
-# --- room (Hoarbound ThermalZone shape) ---------------------------------
-PASSIVE_OFFSET_C = 3.0  # a roof and walls, no fire: Hoarbound's "ruin with a roof, maybe +3"
-MAX_HEATED_OFFSET_C = 12.0  # the part the player earns
+PASSIVE_OFFSET_C = 3.0
+MAX_HEATED_OFFSET_C = 12.0
 HEATING_RATE_C_PER_H = 6.0
 COOLING_RATE_C_PER_H = 3.0
 FUEL_BURN_PER_H = 1.0
-
-# --- body ---------------------------------------------------------------
-COMFORT_C = 12.0
-BASAL_HEAT_C = 5.0  # load-bearing: without it nothing rewarms (Hoarbound §2)
-CLOTHING_INSULATION_C = 6.0
-# A lit stove is both a zone heater and a point heat source beside the sleeper; Hoarbound sums the two,
-# and without that term there is no reachable configuration where the body rewarms at -18 °C.
 HEAT_SOURCE_OFFSET_C = 10.0
-# Both coefficients are solved from Hoarbound's documented behaviour, not picked by hand:
-# 1.5 °C/h lost exposed at -18 °C dry; a sheltered fire brings 35 °C back to 37 °C in about two hours.
-COOLING_COEF = 0.079
-REWARM_COEF = 0.167
-START_CORE_C = 37.0
-HYPOTHERMIC_C = 35.0
-DEATH_C = 28.8  # Hoarbound: death after about 5.5 h of that exposure
-# Author's rule (19.11.2026): a cold night wakes the sleeper instead of killing them in their sleep.
-# Bad preparation must hand the player a new problem they can answer, not a death with no reply.
-WAKE_COLD_C = 35.5
+
+# One person = one memory, no independent stove-only Beliefs object.
+EveningBeliefs = Beliefs
 
 # --- work ---------------------------------------------------------------
 @dataclass(frozen=True)
@@ -65,23 +57,8 @@ HEAVY = Work("разобрать мебель", 1.5, 4, 55.0, 7.0)
 SEAL = Work("утеплить комнату", 0.75, 0, 25.0, 4.5)
 PACK = Work("подготовить снаряжение и маршрут", 0.75, 0, 18.0, 3.0)
 SEAL_COOLING_FACTOR = 0.5
-IDLE_FATIGUE_PER_H = 2.0  # just being awake and cold
 
 
-RECOVERY_PER_H = 6.0  # how much fatigue a warm hour of sleep pays back; placeholder, and a real design lever
-
-
-@dataclass
-class Body:
-    core_c: float = START_CORE_C
-    stamina: float = 100.0
-    fatigue: float = 45.0  # 0 = rested, 100 = spent; evening after a trip
-    recovery_per_h: float = RECOVERY_PER_H
-    packed: bool = False  # preparation done before the night
-
-    def stamina_recovery_per_h(self) -> float:
-        """Fatigue slows breath coming back (Hoarbound: recovery pace × energy)."""
-        return 60.0 * max(0.2, 1.0 - self.fatigue / 100.0)
 
 
 @dataclass
@@ -117,24 +94,9 @@ class Room:
 
 def step_body(body: Body, room: Room, outside_c: float, hours: float, asleep: bool,
               fatigue_per_h: float = 0.0) -> None:
-    effective = room.felt_c(outside_c) + CLOTHING_INSULATION_C + BASAL_HEAT_C
-    if effective < COMFORT_C:
-        body.core_c = max(DEATH_C, body.core_c - (COMFORT_C - effective) * COOLING_COEF * hours)
-    else:
-        body.core_c = min(START_CORE_C, body.core_c + (effective - COMFORT_C) * REWARM_COEF * hours)
-    if asleep:
-        # Sleep pays back fatigue, but being cold while asleep eats the recovery (not a separate formula:
-        # the same core temperature that the thermal model produced).
-        recovered = body.recovery_per_h * hours
-        if body.core_c < HYPOTHERMIC_C:
-            recovered *= 0.25
-        elif body.core_c < 36.0:
-            recovered *= 0.6
-        body.fatigue = max(0.0, body.fatigue - recovered)
-        body.stamina = min(100.0, body.stamina + body.stamina_recovery_per_h() * hours)
-    else:
-        body.fatigue = min(100.0, body.fatigue + fatigue_per_h * hours)
-        body.stamina = min(100.0, body.stamina + body.stamina_recovery_per_h() * hours * 0.5)
+    """One thermal and fatigue integrator for both the street and the room."""
+    step_core(body, room.felt_c(outside_c), hours)
+    step_fatigue(body, hours, asleep=asleep, per_hour=fatigue_per_h)
 
 
 def sleep_refusal(room: Room, body: Body, outside_c: float) -> str | None:
@@ -146,41 +108,6 @@ def sleep_refusal(room: Room, body: Body, outside_c: float) -> str | None:
     if body.fatigue < 15.0:
         return "ещё не устал настолько, чтобы заснуть"
     return None
-
-
-# --- what the player believes -------------------------------------------
-@dataclass
-class EveningBeliefs:
-    """Guesses, which may be wrong. Updated by what the morning actually showed."""
-    cooling_rate_est: float = COOLING_RATE_C_PER_H
-    burn_rate_est: float = FUEL_BURN_PER_H
-    recovery_est: float = RECOVERY_PER_H
-    work_hours_est: dict[str, float] = field(default_factory=dict)
-
-    def hours_of_fire(self, fuel: float) -> float:
-        return fuel / max(0.1, self.burn_rate_est)
-
-    def expected_work_hours(self, work: Work) -> float:
-        return self.work_hours_est.get(work.name, work.hours)
-
-    def observe_burn_rate(self, measured_per_h: float) -> str:
-        """Update in either direction ONLY after an observable, timed fuel reading."""
-        if measured_per_h <= 0:
-            raise ValueError("observed burn rate must be positive")
-        old = self.burn_rate_est
-        self.burn_rate_est = 0.5 * old + 0.5 * measured_per_h
-        return f"наблюдаемый расход топлива: {old:.2f}→{self.burn_rate_est:.2f} в час"
-
-    def observe_rate_lower_bound(self, minimum_per_h: float) -> str:
-        """Fire was out when checked: only its minimum possible rate is known."""
-        if minimum_per_h <= 0:
-            raise ValueError("rate bound must be positive")
-        old = self.burn_rate_est
-        if old >= minimum_per_h:
-            return "погасший огонь не уточнил оценку расхода"
-        self.burn_rate_est = 0.5 * (old + minimum_per_h)
-        return (f"огонь уже погас: расход не меньше {minimum_per_h:.2f} в час; "
-                f"оценка {old:.2f}→{self.burn_rate_est:.2f}")
 
 
 @dataclass(frozen=True)
@@ -211,7 +138,8 @@ class EveningOption:
 
 
 def _forecast(opt: EveningOption, body: Body, room: Room, beliefs: EveningBeliefs,
-              tomorrow: Tomorrow, outside_c: float, daylight_hours: float = DAYLIGHT_H) -> dict:
+              tomorrow: Tomorrow, outside_c: float, daylight_hours: float = DAYLIGHT_H,
+              night_hours: float = HOURS_OF_NIGHT) -> dict:
     """A mental dry-run against BELIEVED fuel/cooling and visible room state.
 
     Uses the same physical night integrator as the real run, but on copies
@@ -242,7 +170,7 @@ def _forecast(opt: EveningOption, body: Body, room: Room, beliefs: EveningBelief
             "option": opt.label, "available": False,
             "work_hours_expected": round(work_h, 2),
             "fuel_after": fuel_after, "fire_hours_expected": round(fire_h, 1),
-            "night_hours": round(HOURS_OF_NIGHT - work_h, 1),
+            "night_hours": round(night_hours - work_h, 1),
             "cold_hours_expected": None, "wake_hours_expected": None,
             "core_at_morning_if_uninterrupted": None,
             "expects_to_wake_cold": None, "morning_fatigue_expected": None,
@@ -273,7 +201,8 @@ def _forecast(opt: EveningOption, body: Body, room: Room, beliefs: EveningBelief
     # Local import: evening_run already depends on this module; the runtime
     # call is safe and avoids maintaining an inconsistent second night model.
     from .evening_run import play
-    predicted = play(opt.label, outside_c, shadow_room, shadow_body, beliefs)
+    predicted = play(opt.label, outside_c, shadow_room, shadow_body, beliefs,
+                     hours_of_night=night_hours)
     morning_fatigue = predicted["morning_fatigue"]
     prep_h = 0.0 if shadow_body.packed else morning_prep_hours(tomorrow)
     day_effort = travel_effort + prep_h * 1.5
@@ -288,7 +217,7 @@ def _forecast(opt: EveningOption, body: Body, room: Room, beliefs: EveningBelief
         "work_hours_expected": round(work_h, 2),
         "fuel_after": fuel_after,
         "fire_hours_expected": round(fire_h, 1),
-        "night_hours": round(HOURS_OF_NIGHT - work_h, 1),
+        "night_hours": round(night_hours - work_h, 1),
         "cold_hours_expected": predicted["hours_below_hypothermic"],
         "wake_hours_expected": predicted["awake_at_night_h"],
         "core_at_morning_if_uninterrupted": predicted["morning_core_c"],
@@ -311,19 +240,21 @@ OPTIONS = (EveningOption("A: разобрать мебель, топить до�
 
 
 def options(body: Body, room: Room, beliefs: EveningBeliefs, tomorrow: Tomorrow,
-            outside_c: float, daylight_hours: float = DAYLIGHT_H) -> list[dict]:
+            outside_c: float, daylight_hours: float = DAYLIGHT_H,
+            night_hours: float = HOURS_OF_NIGHT) -> list[dict]:
     """Four options with predictions based on the player's knowledge, not a prescribed choice."""
-    return [_forecast(o, body, room, beliefs, tomorrow, outside_c, daylight_hours) for o in OPTIONS]
+    return [_forecast(o, body, room, beliefs, tomorrow, outside_c, daylight_hours, night_hours) for o in OPTIONS]
 
 
 def choose(body: Body, room: Room, beliefs: EveningBeliefs, tomorrow: Tomorrow,
-           outside_c: float, daylight_hours: float = DAYLIGHT_H) -> tuple[dict, str, Tomorrow]:
+           outside_c: float, daylight_hours: float = DAYLIGHT_H,
+           night_hours: float = HOURS_OF_NIGHT) -> tuple[dict, str, Tomorrow]:
     """Weigh predicted night's disruption and next day's load. No true-night oracle.
 
     Plans change the cost of fatigue and daylight; there is no plan-to-option lookup.
     Decisions are research heuristics, not a proven human policy.
     """
-    opts = options(body, room, beliefs, tomorrow, outside_c, daylight_hours)
+    opts = options(body, room, beliefs, tomorrow, outside_c, daylight_hours, night_hours)
     eligible = [o for o in opts if o["available"]]
     # Packing is available to the player, but a one-day planner does not spend
     # tonight preparing a journey that its own forecast says cannot happen.
