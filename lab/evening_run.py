@@ -13,7 +13,7 @@ from typing import Callable
 
 from .evening import (COOLING_RATE_C_PER_H, EXPEDITION, HEAVY, HOURS_OF_NIGHT, HYPOTHERMIC_C,
                       IDLE_FATIGUE_PER_H, SEAL, PACK, SEAL_COOLING_FACTOR, SHORT_WALK, STEP_H, UNDECIDED,
-                      RECOVERY_PER_H, WAKE_COLD_C, Body, EveningBeliefs, Room, Tomorrow, choose,
+                      RECOVERY_PER_H, WAKE_COLD_C, CLOTHING_INSULATION_C, Body, EveningBeliefs, Room, Tomorrow, choose,
                       options, sleep_refusal, step_body)
 
 OUTSIDE_C = -18.0  # Hoarbound's reference exposure figure; placeholder, not TheLull balance
@@ -22,7 +22,8 @@ OUTSIDE_C = -18.0  # Hoarbound's reference exposure figure; placeholder, not The
 def play(option_label: str, outside_c: float, room: Room, body: Body, beliefs: EveningBeliefs,
          *, hours_of_night: float = HOURS_OF_NIGHT,
          automatic_ignition: bool = True,
-         on_fire_opportunity: Callable[[str, float], None] | None = None) -> dict:
+         on_fire_opportunity: Callable[[str, float], None] | None = None,
+         clothing_c: float = CLOTHING_INSULATION_C) -> dict:
     if hours_of_night <= 0:
         raise ValueError("night duration must be positive")
     work = {"A": HEAVY, "B": None, "C": SEAL, "D": PACK}[option_label[0]]
@@ -69,7 +70,7 @@ def play(option_label: str, outside_c: float, room: Room, body: Body, beliefs: E
         while worked < work.hours:
             step = min(STEP_H, work.hours - worked)
             room.step(step)
-            actual = step_body(body, room, outside_c, step, asleep=False, fatigue_per_h=work.fatigue_per_h)
+            actual = step_body(body, room, outside_c, step, asleep=False, fatigue_per_h=work.fatigue_per_h, clothing_c=clothing_c)
             worked += actual
             hour += actual
             if body.terminal:
@@ -105,7 +106,7 @@ def play(option_label: str, outside_c: float, room: Room, body: Body, beliefs: E
         waited = 0.0
         while sleep_refusal(room, body, outside_c) and room.fire_lit and waited < 3.0:
             room.step(STEP_H)
-            actual = step_body(body, room, outside_c, STEP_H, asleep=False, fatigue_per_h=IDLE_FATIGUE_PER_H)
+            actual = step_body(body, room, outside_c, STEP_H, asleep=False, fatigue_per_h=IDLE_FATIGUE_PER_H, clothing_c=clothing_c)
             waited += actual
             hour += actual
             if body.terminal:
@@ -147,7 +148,7 @@ def play(option_label: str, outside_c: float, room: Room, body: Body, beliefs: E
                 for _ in range(int(round(HEAVY.hours / STEP_H))):
                     room.step(STEP_H)
                     actual = step_body(body, room, outside_c, STEP_H, asleep=False,
-                                       fatigue_per_h=HEAVY.fatigue_per_h)
+                                       fatigue_per_h=HEAVY.fatigue_per_h, clothing_c=clothing_c)
                     awake_h += actual
                     if body.terminal:
                         return stopped()
@@ -178,7 +179,7 @@ def play(option_label: str, outside_c: float, room: Room, body: Body, beliefs: E
             log.append(f"{hour + slept + awake_h:4.1f} ч: согрелся — снова лёг")
         room.step(STEP_H)
         actual = step_body(body, room, outside_c, STEP_H, asleep=asleep,
-                           fatigue_per_h=0.0 if asleep else IDLE_FATIGUE_PER_H)
+                           fatigue_per_h=0.0 if asleep else IDLE_FATIGUE_PER_H, clothing_c=clothing_c)
         if asleep:
             slept += actual
         else:
