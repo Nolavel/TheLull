@@ -37,6 +37,8 @@ class BodyFollowthrough(unittest.TestCase):
         self.assertEqual(r["rest_minutes"],0)
         self.assertTrue(r["completed"])
         self.assertAlmostEqual(body.elapsed_minutes,60)
+        self.assertAlmostEqual(body.stamina,55.0)
+        self.assertGreater(body.fatigue,0)
 
     def test_post_trip_work_preserves_wet_thermal_penalty(self):
         world=make_world("B_readable",1)
