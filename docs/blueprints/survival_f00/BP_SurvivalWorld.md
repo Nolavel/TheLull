@@ -49,7 +49,7 @@ RestoreWorldTime(RestoredSeconds: Double) -> bRestored: Boolean
 Dispatcher OnTimeAdvanceFinished(NewTimeSeconds: Double, Reason: GameplayTag)
 ```
 
-### Event Graph (точный порядок execution)
+## Event graph — точный порядок execution
 
 ```text
 event BeginPlay() {
