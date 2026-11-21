@@ -7,6 +7,11 @@
 
 ## Unreleased
 
+### Decision / Added (production: Core before geography; drafts before review, 21.11.2026)
+
+- Автор изменил приоритет: TLD survival core → minimal HUD → Debug UI → связанные действия/ресурсы → география. Трафареты можно публиковать в production до Cloud review, явно NEEDS REVIEW / NEEDS RE-REVIEW; это не статус готовности к сборке. F00 размещён на L_SurvivalCore; граф часов не изменён. Старый план квартала DEFERRED.
+- Перенесены ST_CoreVitals, BPC_SurvivalBody, WBP_VitalsHUD, WBP_SurvivalDebug, L_SurvivalCore и BP_CoreExposureZone (реальная позиция pawn влияет на тепловой вход, debug override отдельно). Источник: ue-codex@2d4a761e9df7393891f7b5065e389e40b69028df; synthetic coefficients, UE/MCP/PIE NOT RUN. Lab/CI и чужие ветки не переносились. Codex / production.
+
 ### Added (spatial core exposure draft, 21.11.2026)
 
 - Автор разрешил публиковать MD до независимого ревью с NEEDS REVIEW; не переносить lab/CI. Добавлен BP_CoreExposureZone, тело получает input от реальной позиции Pawn при clock step, Debug явно показывает/сбрасывает override; обновлены snapshot, map, acceptance. Это ранний тест среды, не погода/печь. Source review Epic 5.8 и Hinterland, UE/PIE ещё не проверены. Codex / ue-codex.
