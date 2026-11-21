@@ -3,6 +3,12 @@
 Действуют для любого агента (Claude, Codex, Grok и другие) и не зависят от конкретного MCP или инструмента.
 Где правило агента (`CLAUDE.md` и т. п.) расходится с этим файлом, главнее этот файл.
 
+## Обязательный манифест survival (решение автора 21.11.2026)
+
+**Перед началом проектирования, изменения или переноса survival-логики читать [`docs/gameplay/SURVIVAL_MANIFEST.md`](docs/gameplay/SURVIVAL_MANIFEST.md).** Это обязательный вход в работу для всех агентов, не факультативный референс. Его четыре условия: (1) начинать с core loop The Long Dark → самостоятельный loop TheLull; (2) сопоставлять TLD, жанр, реальный Hoarbound и документальный Key West; (3) выводить исполнимый UE-контракт в формате **один Markdown — один Blueprint/UE asset**; (4) проверять причинную цену через соседние системы, ночь, сохранение и в итоге живого игрока.
+
+**Сборочные трафареты:** [`docs/blueprints/README.md`](docs/blueprints/README.md), первый пакет — [`docs/blueprints/survival_f00/`](docs/blueprints/survival_f00/). Существующий план F00 — [`docs/gameplay/reference/SURVIVAL_FOUNDATION_00_TO_UE.md`](docs/gameplay/reference/SURVIVAL_FOUNDATION_00_TO_UE.md). Список и последовательность проверены до создания следующего Blueprint; реальную компиляцию/PIE нельзя подменять текстом или Python.
+
 ## Ветки — строгое правило
 
 Один агент — одна постоянная ветка. Агенты никогда не делят рабочую ветку.
