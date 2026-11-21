@@ -28,6 +28,8 @@ Manifest + official Epic 5.8 + TLD/Hoarbound/Key West findings
                           ↓
 Codex: one MD = one exact asset path + class + pins + graph + test
                           ↓ commit SHA of stencil
+Claude Cloud: pre-build engineering review of exact stencil SHA → feedback to Codex → reviewed handoff
+Claude Local: configure MCP + create Third Person project (UE 5.8.4 installed per owner)
 Claude Local: preflight .uproject + installed UE 5.8.4 + actual Unreal MCP
                           ↓
 one asset via MCP → Compile → Save → inspect actual nodes → PIE/automation
@@ -45,7 +47,7 @@ author approves integration → next asset / F01...
 
 [**Журнал расхождений и улучшений (backlog)**](project/BACKLOG.md) содержит `Expected` vs `Actual`, доказательства из редактора, ссылки на docs UE 5.8, severity, проявление для core loop, решение и owner. Пока проверки не выполнены, все пункты `NOT RUN`. Claude **не редактирует ветку Codex**: результаты публикует в своей ветке, затем делает точный handoff. В `production` никто не сливает без решения автора.
 
-Claude Cloud готовит инструменты сверки до появления редактора и проводит отдельное инженерное ревью по переданным артефактам после сборки; это не замена локальной самопроверке и backlog. Пока локальная среда не готова, Codex продолжает работу над ближайшими зависимостями, Cloud — над технической подготовкой. [Роли](../../CLAUDE.md).
+Claude Cloud прежде всего проводит инженерное ревью MD до локальной сборки, указывает SHA, замечания, предложенные исправления и локально непроверенные вопросы; Codex исправляет трафареты. Cloud также готовит инструменты сверки и может ревьюить переданные артефакты после сборки; это не замена локальной самопроверке и backlog. UE 5.8.4 установлен по сообщению автора 21.11.2026; Local настраивает MCP и создаёт проект. В это время Codex готовит ближайшие зависимости, Cloud перепроверяет их до передачи Local. [Роли](../../CLAUDE.md).
 
 Старый [`BP_LogicTest.md`](BP_LogicTest.md) остаётся историческим примером формата, **не частью F00**. Текущий `tools/check_stencil.py` способен сравнивать только `Event graph` Blueprint Class с текстовым выводом `uasset`, и **не** является универсальной проверкой Struct/Interface/Level/Config или доказательством PIE. Проверка по самому актуальному Unreal MCP/редактору обязательна; эвристика `rust-uasset` — дополнение.
 
