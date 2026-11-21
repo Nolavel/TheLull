@@ -11,7 +11,7 @@
 
 - Расширен [survival-манифест](docs/gameplay/SURVIVAL_MANIFEST.md): обязательная официальная справка **Epic UE 5.8** и проверка реальных pin/asset classes в установленном **UE 5.8.4**, capability-check текущего Unreal MCP без выдуманных операций.
 - Первый F00-пакет теперь является [зеркалом UE-проекта](docs/blueprints/project/README.md): `project/Content/Survival/Time/`, `project/Content/Tests/`, `project/Content/Maps/`, `project/Config/` с **одним MD на один фактический UE asset/config**; пути соответствуют будущим `.uasset`, `.umap`, `.ini` в *реальном* локальном проекте.
-- [Claude Code build-feedback backlog](docs/blueprints/project/BACKLOG.md) — после атомарной сборки через Unreal MCP Claude обязан Compile/Save/inspect/PIE, сравнить actual с MD, записать errors/improvements с evidence и передать Codex уточнения для контрактов. **Сейчас только `NOT RUN` и preflight; Unreal-ассеты не создавались, MCA/PIE не проверены.** Инструкции закреплены в `AGENTS.md`, `CLAUDE.md`, `CODEX.md`. Codex / `ue-codex`.
+- [Claude Code build-feedback backlog](docs/blueprints/project/BACKLOG.md) — после атомарной сборки через Unreal MCP Claude обязан Compile/Save/inspect/PIE, сравнить actual с MD, записать errors/improvements с evidence и передать Codex уточнения для контрактов. **Сейчас только `NOT RUN` и preflight; Unreal-ассеты не создавались, MCP/PIE не проверены.** Инструкции закреплены в `AGENTS.md`, `CLAUDE.md`, `CODEX.md`. Codex / `ue-codex`.
 
 
 ### Decision (обязательный survival-манифест и первый редакторский маршрут, 21.11.2026)
