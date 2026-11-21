@@ -15,6 +15,9 @@ WALK_SPEED_M_PER_MIN = 72.0  # ~1.2 m/s in snow
 CALM_WIND = 0.2
 STORM_WIND = 1.0
 
+DAY_MINUTES = 24 * 60  # one clock for everything; day and night are windows inside it
+CHILL_C_PER_WIND = 14.0  # degrees stripped by a full storm on a fully exposed street
+
 
 @dataclass
 class Edge:
@@ -36,6 +39,7 @@ class DayWeather:
     signal_at: int | None  # when a readable sign appears (may be a false alarm)
 
     def wind(self, minute: float) -> float:
+        """Minutes are absolute within the 24-hour day, so a storm can run past dusk."""
         if self.storm_start is not None and self.storm_start <= minute < self.storm_end:
             return STORM_WIND
         return CALM_WIND
@@ -48,13 +52,31 @@ class DayWeather:
 class World:
     name: str
     variant: str
-    day_length: int
+    day_length: int  # dusk: the minute daylight ends, inside a 24-hour day
     fuel_per_night: int
     start_fuel: int
     nodes: dict[str, dict]
     edges: list[Edge]
     weather_rules: dict
+    air_temp_c: float = -12.0
+    dawn_min: int = 8 * 60
     loot: dict[str, int] = field(default_factory=dict)
+
+    @property
+    def daylight_hours(self) -> float:
+        return (self.day_length - self.dawn_min) / 60.0
+
+    @property
+    def night_hours(self) -> float:
+        """What is left of the 24 hours. Day plus night must be a whole day — that is the contract."""
+        return (DAY_MINUTES - (self.day_length - self.dawn_min)) / 60.0
+
+    def is_daylight(self, minute: float) -> bool:
+        return self.dawn_min <= minute < self.day_length
+
+    def felt_outdoors_c(self, exposure: float, minute: float, weather: DayWeather) -> float:
+        """Air temperature minus wind chill, in degrees. The body model takes it from here."""
+        return self.air_temp_c - weather.wind(minute) * exposure * CHILL_C_PER_WIND
 
     @classmethod
     def load(cls, name: str, variant: str) -> "World":
@@ -66,6 +88,8 @@ class World:
             name=name,
             variant=variant,
             day_length=data["day_length_min"],
+            air_temp_c=float(data.get("air_temp_c", -12.0)) + float(v.get("air_temp_offset_c", 0.0)),
+            dawn_min=int(data.get("dawn_min", 8 * 60)),
             fuel_per_night=data["fuel_per_night"],
             start_fuel=data["start_fuel"],
             nodes=data["nodes"],
@@ -86,7 +110,7 @@ class World:
     def travel_minutes(self, edge: Edge, minute: float, weather: DayWeather) -> float:
         base = edge.length_m / WALK_SPEED_M_PER_MIN
         slow = 1.0 + edge.exposure * weather.wind(minute) * 1.5
-        dark = 1.5 if minute >= self.day_length else 1.0
+        dark = 1.0 if self.is_daylight(minute) else 1.5
         return base * slow * dark
 
     def warmth_loss_per_min(self, exposure: float, minute: float, weather: DayWeather) -> float:
@@ -106,10 +130,11 @@ class World:
         r = self.weather_rules
         u_storm, u_time, u_len, u_false = (rng.random() for _ in range(4))
         if u_storm < r["storm_chance"]:
-            storm_start = int(90 + u_time * (self.day_length - 150))
+            # A storm may start at any hour of the 24, including after dark, when nobody sees it begin.
+            storm_start = int(u_time * (DAY_MINUTES - 120))
             storm_end = storm_start + int(60 + u_len * 60)
             signal_at = storm_start - r["signal_lead_min"] if r["signal_lead_min"] > 0 else None
             return DayWeather(storm_start, storm_end, signal_at)
         if u_false < r["false_signal_chance"]:
-            return DayWeather(None, None, int(60 + u_time * (self.day_length - 120)))
+            return DayWeather(None, None, int(self.dawn_min + u_time * (self.day_length - self.dawn_min - 60)))
         return DayWeather(None, None, None)

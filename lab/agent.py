@@ -52,6 +52,14 @@ class Beliefs:
     signal_misses: float = 1.0
     knows_storms_pass: bool = False
     storm_duration_est: float | None = None  # what the player believes, never the world's truth
+    # One memory for one person. These were a separate EveningBeliefs object, so a lesson learned at
+    # night never reached the next day's trip. The evening cycle reads and updates them here.
+    cooling_rate_est: float = 3.0  # how fast the player thinks the room bleeds its warmth, °C/h
+    burn_rate_est: float = 1.0  # how fast the player thinks fuel burns, units/h
+    recovery_est: float = 6.0  # how much rest the player thinks a warm hour of sleep pays back
+
+    def hours_of_fire(self, fuel: float) -> float:
+        return fuel / max(0.1, self.burn_rate_est)
 
     def signal_trust(self) -> float:
         return self.signal_hits / (self.signal_hits + self.signal_misses)

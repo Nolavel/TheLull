@@ -11,10 +11,15 @@ import random
 from dataclasses import dataclass, field
 
 from .agent import CARRY_CAPACITY, SEARCH_CHUNK_MIN, Agent
+from .body import (DEATH_C, HYPOTHERMIC_C, TRAVEL_FATIGUE_PER_H, Body, step_core, step_fatigue)
 from .world import DayWeather, World
 
-DEPART_MIN = 60
-INDOOR_LOSS_PER_MIN = 0.3
+DEPART_AFTER_DAWN_MIN = 60  # the player does not leave at first light
+# Deprecated, kept only so lab/loop_bridge.py keeps importing while Codex migrates. Minutes are now
+# absolute inside the 24-hour day, so departure is world.dawn_min + DEPART_AFTER_DAWN_MIN, not this value.
+# The day now bills fatigue and cold to the shared Body, so the bridge's own fatigue heuristic can go.
+DEPART_MIN = DEPART_AFTER_DAWN_MIN
+INDOOR_EXPOSURE = 0.15  # an unheated building still blocks most of the wind
 WAIT_CHUNK_MIN = 15  # the player re-decides this often while waiting out a storm
 LOOT_PER_CHUNK = 1.5  # what the player expects from one search chunk
 
@@ -49,13 +54,14 @@ class DayRecord:
     caught_in_storm: bool = False
     after_dark: bool = False
     crisis: bool = False
-    min_warmth: float = 100.0
+    min_core_c: float = 37.0  # degrees, the same scale the night uses
     waited_out_storm: bool = False
     storm_observed: bool = False  # the player saw for itself whether a storm came
     storm_start: int | None = None  # weather truth, recorded for experiment checks
     storm_end: int | None = None
     cold_night: bool = False
     next_intention: str = ""
+    run_end_reason: str | None = None  # set on the last day when the run cannot go on
     decisions: list[Decision] = field(default_factory=list)
     events: list[str] = field(default_factory=list)
 
@@ -74,7 +80,8 @@ class DayRecord:
 
 
 def clock(minute: float) -> str:
-    total = 8 * 60 + int(minute)  # day starts at 08:00
+    """Absolute minutes inside the 24-hour day."""
+    total = int(minute) % (24 * 60)
     return f"{total // 60:02d}:{total % 60:02d}"
 
 
@@ -89,9 +96,11 @@ def _predicted_trip(agent: Agent, node: str) -> float:
 
 
 def run_day(world: World, agent: Agent, weather: DayWeather, lrng: random.Random, day: int, fuel: int,
-            signals_visible: bool = True) -> tuple[DayRecord, int]:
+            signals_visible: bool = True, body: Body | None = None) -> tuple[DayRecord, int]:
+    body = body if body is not None else Body()
     rec = DayRecord(day=day, fuel_morning=fuel, margin=agent.margin, signal_trust=agent.beliefs.signal_trust(),
-                    storm_start=weather.storm_start, storm_end=weather.storm_end)
+                    storm_start=weather.storm_start, storm_end=weather.storm_end, min_core_c=body.core_c)
+    depart = world.dawn_min + DEPART_AFTER_DAWN_MIN
 
     if fuel >= world.fuel_per_night + 1:
         rec.decisions.append(Decision(
@@ -106,7 +115,7 @@ def run_day(world: World, agent: Agent, weather: DayWeather, lrng: random.Random
     if ranking:
         target = ranking[0]["node"]
         target_dec = Decision(
-            clock(DEPART_MIN), "цель", "принести запасы, пока светло",
+            clock(depart), "цель", "принести запасы, пока светло",
             ["известные запасы: " + ", ".join(f"{r['node']}≈{r['loot']:.0f}" for r in ranking)],
             [{"option": r["node"], "predicted_min": round(_predicted_trip(agent, r["node"])),
               "score": round(r["score"], 3)} for r in ranking],
@@ -117,26 +126,26 @@ def run_day(world: World, agent: Agent, weather: DayWeather, lrng: random.Random
                       and agent.path("home", n)[1]]
         if not unexplored:
             rec.decisions.append(Decision(
-                clock(DEPART_MIN), "цель", "нет известной цели",
+                clock(depart), "цель", "нет известной цели",
                 ["известных запасов нет", "неизученных мест нет"], [], "остаться дома", "некуда идти"))
             rec.events.append("не знает, куда идти — остался дома")
             return _night(world, rec, fuel)
         target = min(unexplored, key=lambda n: agent.path("home", n)[0])
         target_dec = Decision(
-            clock(DEPART_MIN), "разведка", "узнать, что есть рядом",
+            clock(depart), "разведка", "узнать, что есть рядом",
             ["известных запасов нет"],
             [{"option": n, "predicted_min": round(agent.path("home", n)[0] * 2)} for n in unexplored],
             target, "ближайший неизученный путь")
     rec.decisions.append(target_dec)
 
-    now = float(DEPART_MIN)
+    now = float(depart)
     out_cost, _ = agent.path("home", target)
     rec.went_out, rec.target = True, target
     rec.predicted_travel = 2 * out_cost
     rec.predicted_return = now + _predicted_trip(agent, target)
     rec.events.append(f"{clock(now)} вышел к {target}, рассчитывает вернуться к {clock(rec.predicted_return)}")
 
-    node, goal, warmth, carried = "home", target, 100.0, 0
+    node, goal, carried = "home", target, 0  # warmth lives in body.core_c now, carried across days
     noticed = False
     returning = False
     sig = {"dec": None}
@@ -180,7 +189,10 @@ def run_day(world: World, agent: Agent, weather: DayWeather, lrng: random.Random
                     rec.events.append(f"{clock(now)} пора возвращаться: до темноты впритык (запас {agent.margin:.0f} мин)")
                     break
                 now += SEARCH_CHUNK_MIN
-                warmth -= INDOOR_LOSS_PER_MIN * SEARCH_CHUNK_MIN
+                felt = world.felt_outdoors_c(INDOOR_EXPOSURE, now, weather)
+                step_core(body, felt, SEARCH_CHUNK_MIN / 60.0)
+                step_fatigue(body, SEARCH_CHUNK_MIN / 60.0, asleep=False, per_hour=TRAVEL_FATIGUE_PER_H)
+                rec.min_core_c = min(rec.min_core_c, body.core_c)
                 got = min(world.loot.get(node, 0), lrng.randint(1, 2), CARRY_CAPACITY - carried)
                 world.loot[node] = world.loot.get(node, 0) - got
                 carried += got
@@ -226,15 +238,18 @@ def run_day(world: World, agent: Agent, weather: DayWeather, lrng: random.Random
                         gave_up = True
                         rec.events.append(f"{clock(now)} буря длится дольше, чем он ожидал — выходит в неё")
                         break
-                    if warmth < 35 or now + WAIT_CHUNK_MIN + home_cost + agent.margin > world.day_length:
+                    if body.is_hypothermic() or now + WAIT_CHUNK_MIN + home_cost + agent.margin > world.day_length:
                         gave_up = True
                         rec.events.append(f"{clock(now)} ждать больше нельзя: "
-                                          + ("мёрзнет" if warmth < 35 else "темнеет") + " — выходит в бурю")
+                                          + ("мёрзнет" if body.is_hypothermic() else "темнеет") + " — выходит в бурю")
                         break
                     now += WAIT_CHUNK_MIN
                     waited += WAIT_CHUNK_MIN
-                    warmth -= world.wait_loss_per_min(node, now, weather) * WAIT_CHUNK_MIN
-                rec.min_warmth = min(rec.min_warmth, warmth)
+                    felt = world.felt_outdoors_c(INDOOR_EXPOSURE if world.nodes[node]["kind"] != "waypoint"
+                                                 else 0.5, now, weather)
+                    step_core(body, felt, WAIT_CHUNK_MIN / 60.0)
+                    step_fatigue(body, WAIT_CHUNK_MIN / 60.0, asleep=False)
+                    rec.min_core_c = min(rec.min_core_c, body.core_c)
                 rec.plan_changes += 1
                 rec.waited_out_storm = not gave_up
                 storm_dec.outcome = (f"ждал {waited:.0f} мин, буря прошла" if not gave_up
@@ -256,18 +271,19 @@ def run_day(world: World, agent: Agent, weather: DayWeather, lrng: random.Random
         predicted = agent.observe_edge(node, nxt, storm_now, minutes)
         rec.actual_travel += minutes
         if minutes > predicted * 1.5:
-            what = " в буре" if storm_now else (" в темноте" if now >= world.day_length else "")
+            what = " в буре" if storm_now else (" в темноте" if not world.is_daylight(now) else "")
             rec.events.append(f"{clock(now)} {node}→{nxt}{what}: {minutes:.0f} мин вместо ожидаемых {predicted:.0f}")
-        warmth -= world.warmth_loss_per_min(edge.exposure, now, weather) * minutes
+        step_core(body, world.felt_outdoors_c(edge.exposure, now, weather), minutes / 60.0)
+        step_fatigue(body, minutes / 60.0, asleep=False, per_hour=TRAVEL_FATIGUE_PER_H)
         now += minutes
-        rec.min_warmth = min(rec.min_warmth, warmth)
+        rec.min_core_c = min(rec.min_core_c, body.core_c)
         node = nxt
         for found in agent.discover(node, world):
             rec.events.append(f"{clock(now)} в {node} увидел путь к {found}")
         check_signal()
-        if warmth <= 0:
+        if body.core_c <= HYPOTHERMIC_C - 2.0:
             rec.crisis = True
-            rec.events.append(f"{clock(now)} замёрз в пути — с трудом добрался домой без добычи")
+            rec.events.append(f"{clock(now)} замерзает в пути ({body.core_c:.1f}°) — бросает добычу и идёт домой")
             carried, now = 0, now + 30
             break
 
@@ -300,7 +316,7 @@ def run_day(world: World, agent: Agent, weather: DayWeather, lrng: random.Random
                           + (", уже темно" if rec.after_dark else ""))
     rec.events.append(f"{clock(now)} дома, принёс {carried}" + (" — уже стемнело" if rec.after_dark else ""))
 
-    scare = rec.after_dark or rec.crisis or rec.caught_in_storm or rec.min_warmth < 25
+    scare = rec.after_dark or rec.crisis or rec.caught_in_storm or rec.min_core_c < HYPOTHERMIC_C
     note = agent.update_margin(scare=scare, on_time=not scare)
     if note:
         rec.events.append(note)
@@ -318,16 +334,45 @@ def _night(world: World, rec: DayRecord, fuel: int) -> tuple[DayRecord, int]:
     return rec, fuel
 
 
+def run_end_reason(world: World, body: Body, agent: Agent, fuel: int, cold_nights: int) -> str | None:
+    """Why this run cannot go on. A run that never ends makes its own averages meaningless.
+
+    Resources are finite by the author's decision and do not come back, so exhaustion is a legitimate
+    ending, not a defect to balance away.
+    """
+    if body.core_c <= DEATH_C + 0.2:
+        return "замёрз"
+    if body.fatigue >= 100.0:
+        return "силы кончились"
+    if fuel <= 0 and not any(v > 0 for v in world.loot.values()):
+        return "район исчерпан: топлива нет и брать негде"
+    if cold_nights >= 3:
+        return "три ночи без огня подряд"
+    return None
+
+
 def run(world_name: str, variant: str, profile: str, days: int, seed: int,
-        signals_visible: bool = True) -> list[DayRecord]:
-    """Weather depends only on (seed, day), never on what the player did: conditions stay paired."""
+        signals_visible: bool = True, body: Body | None = None) -> list[DayRecord]:
+    """Weather depends only on (seed, day), never on what the player did: conditions stay paired.
+
+    `body` may be supplied by a caller that owns continuity across a longer run; otherwise a fresh one
+    is made here and still carries across all the days of this run.
+    """
     world = World.load(world_name, variant)
     agent = Agent(profile, world)
+    body = body if body is not None else Body()
     loot_rng = random.Random(f"{seed}:loot")
     fuel = world.start_fuel
-    records = []
+    records: list[DayRecord] = []
+    cold_streak = 0
     for d in range(1, days + 1):
         weather = world.roll_weather(random.Random(f"{seed}:weather:{d}"))
-        rec, fuel = run_day(world, agent, weather, loot_rng, d, fuel, signals_visible)
+        rec, fuel = run_day(world, agent, weather, loot_rng, d, fuel, signals_visible, body)
+        cold_streak = cold_streak + 1 if rec.cold_night else 0
         records.append(rec)
+        reason = run_end_reason(world, body, agent, fuel, cold_streak)
+        if reason:
+            rec.run_end_reason = reason
+            rec.events.append(f"прогон окончен: {reason}")
+            break
     return records
