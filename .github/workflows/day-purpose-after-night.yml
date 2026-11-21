@@ -43,6 +43,19 @@ jobs:
           print("\\n### First concrete actions")
           for p,a in r["first_action_by_policy"].items():
               print(f"- {p}: {a}")
+          print("\\n### Paired physical consequences, stratified by opportunity loss/gain")
+          for category,metrics in r["outcomes_by_opportunity"].items():
+              print(f"- {category}: {metrics}")
+          print("\\n### Lost-work cases with different, PAID morning action")
+          if not r["distinct_lost_work_replans"]:
+              print("No divergent response despite lost opportunity — negative result.")
+          for row in r["distinct_lost_work_replans"][:6]:
+              x=row["input"];a=row["policies"]["opportunity"]
+              b=row["policies"]["continue_job"]
+              print(f"- {x}: blockers={row['actual_morning_job_opportunity']['blockers']}; "
+                    f"adaptive={a['first_decision']['current_goal']} / {a['first_decision']['choice']}; "
+                    f"control={b['first_decision']['choice']}; "
+                    f"second_dawn={a['second_night']['completed_next_dawn']} vs {b['second_night']['completed_next_dawn']}")
           print("\\n### Physically lost-work examples")
           for row in r["examples"][:5]:
               x=row["input"];a=row["policies"]["opportunity"]
