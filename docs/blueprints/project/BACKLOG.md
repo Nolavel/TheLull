@@ -46,6 +46,10 @@
 - **CORE-008 | NEEDS REVIEW:** spatial BP_CoreRestSpot + Body.SetCoreResting for one 900s sleep slice; hunger/thirst/warmth continue; no free rest after time.
 - **CORE-009 | NEEDS REVIEW:** Debug final signature receives Stock and LastActionError; Level J/K/L routes. Paid actions are separate from mock controls 5/6/7. Action fault after paid time cannot roll back; must visibly stop.
 
+- **CLOCK-007 | NEEDS REVIEW:** Hoarbound 1800+1800 real-second day = 3600s real/86400s game. Replace obsolete Level +60s per 1s timer with BP_RealtimeClockDriver elapsed×24; one Clock writer, pause/low-FPS drift test, key1 toggles driver, no duplicate timer. Not UE tested.
+- **LIGHT-001 | NEEDS REVIEW:** BP_DayNightLighting reads BP_SurvivalWorld and drives UE native directional light + SkyAtmosphere + Skylight. Hoarbound sunrise 06, sunset 18, ambient 02→10 and 18→22, tint 05→07/17→19, 4 game-minute sun steps, 2 real-second smoothing. Visual GPU performance test and true UE rotation pins pending.
+- **LIGHT-002 | LOCAL VERIFICATION REQUIRED:** inspect actual Third Person level lighting actors/settings; avoid native Skylight RecaptureSky per step and auto-exposure false-night; screenshots at 06,12,18,00 and shadow cost on low settings. All new MDs NEEDS REVIEW.
+
 ## Шаблон каждой новой записи (пополняет Claude Local после операции MCP)
 
 ```text

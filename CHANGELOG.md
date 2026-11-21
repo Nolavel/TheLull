@@ -7,6 +7,12 @@
 
 ## Unreleased
 
+### Decision / Added (60-minute Hoarbound-style day and UE-native lighting, 21.11.2026)
+
+- Автор подтвердил сохранение Hoarbound day_duration=1800 real sec + night_duration=1800 real sec: 60 REAL min=24 game h. New pending-review `BP_RealtimeClockDriver` alone requests Clock.AdvanceGameTime(real elapsed × 24 game seconds) using pause-stopped, undilated UE world timing. The obsolete Level Timer of +60 game seconds per real second is **replaced**, not duplicated.
+- New pending-review `BP_DayNightLighting`: reads authoritative Clock, runs UE native DirectionalLight + SkyAtmosphere + SkyLight. Hoarbound 06/18 sunrise/sunset, ambient ramps 02→10 / 18→22, 4 game-minute sun steps with optional 2 real-second visual smoothing; no per-step SkyLight recapture or independent simulation time. Updated L_SurvivalCore, Debug UI (Day N HH:MM, PeriodName), dependency audit and handoff. No moon/weather/astronomical season model is claimed. NEEDS CLOUD REVIEW / UE 5.8.4/MCP/Compile/PIE NOT RUN, especially real light-node pins/low-end GPU. Codex / production.
+
+
 ### Added (production: finite paid actions before geography, 21.11.2026)
 
 - Targeted publication from ue-codex@f366963d8528cc9b797cf5ed2abdd497c2d56007: 3 new stencil targets ST_CoreSupplies, BPC_CoreActions, BP_CoreRestSpot; Body gains controlled paid recovery and paid rest mode, Core level J/K/L routes actions, Debug reads finite stock, dependency audit extended (17 active targets). Water/food starter stock is a finite fixture, not world inventory; rest 900 game seconds only inside spatial RestSpot + warm zone. Hunger/thirst continue falling; no new clock.
