@@ -42,6 +42,10 @@
 
 - **AUDIT-002 | NEEDS CLOUD REVIEW:** all 14 active targets + one deferred geography level checked for reference/dependency consistency; see DEPENDENCY_AUDIT. Unreviewed MD, no runtime proof.
 
+- **CORE-007 | NEEDS REVIEW:** finite ST_CoreSupplies and BPC_CoreActions; paid Drink/Eat consume both time and stock exactly once, reject full-meter/empty stock without debit.
+- **CORE-008 | NEEDS REVIEW:** spatial BP_CoreRestSpot + Body.SetCoreResting for one 900s sleep slice; hunger/thirst/warmth continue; no free rest after time.
+- **CORE-009 | NEEDS REVIEW:** Debug final signature receives Stock and LastActionError; Level J/K/L routes. Paid actions are separate from mock controls 5/6/7. Action fault after paid time cannot roll back; must visibly stop.
+
 ## Шаблон каждой новой записи (пополняет Claude Local после операции MCP)
 
 ```text
