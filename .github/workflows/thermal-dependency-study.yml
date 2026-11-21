@@ -42,6 +42,14 @@ jobs:
           for variant, arms in r["by_variant"].items():
               for name,p in arms["baseline"]["phases"].items():
                   print(f"| {variant} | {name} | {p['mean_hours']} | {p['mean_core_loss_per_day_c']} | {p['mean_core_gain_per_day_c']} | {p['mean_floor_hours']} |")
+          print("\\n### First-evening forecast viability and terminal-temperature artefacts")
+          print("| World | Baseline first evening viable | Baseline first evening 2+ viable | Temperature floor reached | Later rewarming after floor |")
+          print("|---|---:|---:|---:|---:|")
+          for variant, arms in r["by_variant"].items():
+              x=arms["baseline"]
+              print(f"| {variant} | {x['first_evening_with_any_viable_forecast']} | "
+                    f"{x['first_evening_with_multiple_viable_forecasts']} | "
+                    f"{x['runs_ever_hitting_temperature_floor']} | {x['runs_rewarming_after_floor']} |")
           print("\\nChecks: ",r["checks"])
           print("No expected success or preferred strategy is hardcoded.")
           assert not any(r["checks"].values()),r["checks"]
