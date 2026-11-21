@@ -366,6 +366,7 @@ def run(seed: int, variant: str = "B_readable", profile: str = "local",
     if remaining > 1e-7 and not body.terminal:
         _advance(body, room, world, gear, remaining, at_home=True)
     core_at_dusk = body.core_c
+    stamina_at_dusk, fatigue_at_dusk = body.stamina, body.fatigue
     water_at_dusk, wet_at_dusk = gear.safe_water, gear.wetness
     fuel_at_dusk = room.fuel
     night = None
@@ -409,8 +410,8 @@ def run(seed: int, variant: str = "B_readable", profile: str = "local",
         "wet_pace_delay_minutes": round(walking_costs["wet_pace_delay_min"],6),
         "movement_stability_final": round(gear.movement_stability(
             wind=0.2, exposure=0.9),6),
-        "stamina_at_dusk": round(body.stamina,5),
-        "fatigue_at_dusk": round(body.fatigue,5),
+        "stamina_at_dusk": round(stamina_at_dusk,5),
+        "fatigue_at_dusk": round(fatigue_at_dusk,5),
         "stamina_final": round(body.stamina,5),
         "core_at_dusk": round(core_at_dusk,4),
         "core_final": round(body.core_c,4),
