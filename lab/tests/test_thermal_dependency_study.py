@@ -26,6 +26,10 @@ class ThermalDependencyStudyContract(unittest.TestCase):
         for arm in ARMS:
             trace = simulate(4, "C_unreadable", "novice", arm, 4)
             self.assertLess(trace["ledger_error"], 0.001, arm)
+            if trace["first_floor_absolute_h"] is not None:
+                self.assertGreaterEqual(trace["first_floor_absolute_h"], 0)
+                self.assertLessEqual(trace["first_floor_absolute_h"],
+                                     trace["days"] * 24.0 + 1e-4)
             self.assertTrue(all(trace["thermal_phases"][p]["h"] >= 0
                                 for p in PHASES))
             self.assertEqual(len(trace["evening_options"]), trace["nights"])
