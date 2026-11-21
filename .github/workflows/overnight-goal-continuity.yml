@@ -45,6 +45,9 @@ jobs:
                     f"{x['before_night']['goal']} → {x['after_night']['goal']}; "
                     f"time-only={x['time_only_control']['goal']}; "
                     f"reason={x['after_night']['reason']}; "
+                    f"core={x['night_actual']['core_before']}→{x['night_actual']['core_after']}; "
+                    f"fuel_spent={x['night_actual']['fuel_burned']}; "
+                    f"cold_wakes={x['night_actual']['wakes']}; "
                     f"adaptive action={x['adapted_next']['choice'] if x['adapted_next'] else 'none'}; "
                     f"time-only action={x['time_only_next']['choice'] if x['time_only_next'] else 'none'}")
           print("\nContract checks:",r["checks"])
