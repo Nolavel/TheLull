@@ -322,8 +322,10 @@ def run_day(world: World, agent: Agent, weather: DayWeather, lrng: random.Random
         check_signal()
         if body.core_c <= HYPOTHERMIC_C - 2.0:
             rec.crisis = True
-            rec.events.append(f"{clock(now)} замерзает в пути ({body.core_c:.1f}°) — бросает добычу и идёт домой")
-            carried, now = 0, now + 30
+            rec.events.append(f"{clock(now)} больше не может продолжать вылазку ({body.core_c:.1f}°)")
+            carried = 0
+            # Earlier a synthetic 30 minutes were added here without billing
+            # body heat or fatigue. The continuous model cannot permit this.
             break
 
     if body.terminal:
