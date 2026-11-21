@@ -1,0 +1,42 @@
+name: survival-loop
+
+on:
+  push:
+    paths:
+      - "lab/**"
+      - ".github/workflows/survival-loop.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  continuous-day:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Shared-state and resource invariants
+        run: python3 -m unittest lab.tests.test_survival_loop -v
+      - name: Paired finite-world study
+        run: |
+          mkdir -p survival-results
+          python3 -m lab.survival_loop --seeds 60 --days 7 --json survival-results/study.json > /dev/null
+          python3 - <<'PY' | tee -a "$GITHUB_STEP_SUMMARY"
+          import json
+          r = json.load(open("survival-results/study.json", encoding="utf-8"))
+          print("## First continuous day-night simulation")
+          print(f"Seeds: {r['seeds']}; horizon: {r['days']} days")
+          print(f"Mean completed days: {r['mean_days_completed']}")
+          print(f"Observed endings: {r['end_reasons']}")
+          print(f"Evening decisions: {r['evening_choices']}")
+          print(f"Mean trips: {r['mean_trips']}")
+          print("Raw JSON in artifact; parameters are research placeholders, not game balance.")
+          PY
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: survival-loop-results
+          path: survival-results/
