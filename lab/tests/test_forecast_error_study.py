@@ -77,6 +77,16 @@ class ErrorMemoryContracts(unittest.TestCase):
         )
         self.assertEqual(r["heldout"]["seed"],10003)
         self.assertEqual(set(r["decisions"]),{"prior","ema","error"})
+        chain=r["decision_chain"]
+        self.assertEqual(chain["actor_initial_choice"],
+                         r["decisions"]["prior"]["choice"])
+        self.assertEqual(chain["executed_action_source"],
+                         "researcher-controlled training, not actor")
+        self.assertEqual(chain["observed_after"],r["observation"])
+        self.assertEqual(chain["signed_error"],r["signed_error"])
+        self.assertEqual(chain["next_intention"],r["decisions"]["error"]["choice"])
+        self.assertTrue(chain["belief_update"])
+        self.assertTrue(chain["alternatives"])
 
     def test_terminal_training_is_never_taught_as_completed_route(self):
         # C×40 failed in D1.4 for each seed — avoid falsely learning a
