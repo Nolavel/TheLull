@@ -1,6 +1,6 @@
 """The one body and the one thermal model, shared by the day and by the night.
 
-Owner: Claude. Before this, the trip tracked an abstract `warmth` 0..100 that reset every morning, while
+Initial model by Claude, now maintained by Codex. Before this, the trip tracked an abstract `warmth` 0..100 that reset every morning, while
 the evening tracked `core_c` in degrees — two sources of truth about the same person. Everything that
 touches body temperature now goes through `step_core` here, outdoors and indoors alike.
 
@@ -39,6 +39,28 @@ class Body:
     stamina: float = 100.0
     recovery_per_h: float = RECOVERY_PER_H
     packed: bool = False  # One-use evening preparation survives through the night until departure.
+    # Monotonic stop: reached once, never reset by subsequent heating.
+    terminal_reason: str | None = None
+    terminal_at_minute: float | None = None  # elapsed simulation minutes since initial dawn
+    elapsed_minutes: float = 0.0
+    last_step_hours: float = 0.0  # actual billed interval (may end inside a time step)
+
+    @property
+    def terminal(self) -> bool:
+        return self.terminal_reason is not None
+
+    def hours_until_terminal(self, felt_c: float, hours: float,
+                             clothing_c: float = CLOTHING_INSULATION_C) -> float:
+        """Clip a proposed interval at the FIRST crossing of the terminal boundary."""
+        if hours < 0:
+            raise ValueError("time cannot move backwards")
+        if self.terminal:
+            return 0.0
+        thermal = effective_c(felt_c, clothing_c)
+        cooling_rate = max(0.0, COMFORT_C - thermal) * COOLING_COEF
+        if cooling_rate == 0:
+            return hours
+        return min(hours, max(0.0, (self.core_c - DEATH_C) / cooling_rate))
 
     def stamina_recovery_per_h(self) -> float:
         """Fatigue slows breath coming back (Hoarbound: recovery pace x energy)."""
@@ -59,11 +81,21 @@ def effective_c(felt_c: float, clothing_c: float = CLOTHING_INSULATION_C) -> flo
 def step_core(body: Body, felt_c: float, hours: float, clothing_c: float = CLOTHING_INSULATION_C) -> float:
     """The only place core temperature changes. Returns the change in degrees."""
     before = body.core_c
+    body.last_step_hours = 0.0
+    if body.terminal:
+        return 0.0
+    used = body.hours_until_terminal(felt_c, hours, clothing_c)
     effective = effective_c(felt_c, clothing_c)
     if effective < COMFORT_C:
-        body.core_c = max(DEATH_C, body.core_c - (COMFORT_C - effective) * COOLING_COEF * hours)
+        body.core_c = max(DEATH_C, body.core_c - (COMFORT_C - effective) * COOLING_COEF * used)
     else:
-        body.core_c = min(START_CORE_C, body.core_c + (effective - COMFORT_C) * REWARM_COEF * hours)
+        body.core_c = min(START_CORE_C, body.core_c + (effective - COMFORT_C) * REWARM_COEF * used)
+    body.last_step_hours = used
+    body.elapsed_minutes += used * 60.0
+    if body.core_c <= DEATH_C + 1e-9:
+        body.core_c = DEATH_C
+        body.terminal_reason = "температурный предел"
+        body.terminal_at_minute = body.elapsed_minutes
     return body.core_c - before
 
 
