@@ -14,12 +14,12 @@
 
 **Все новые трафареты** размещаем в [`project/`](project/README.md) с **той же вложенностью, что у будущего UE-проекта**:
 - `project/Content/Survival/Time/BP_SurvivalWorld.md` → `<ProjectRoot>/Content/Survival/Time/BP_SurvivalWorld.uasset`;
-- `project/Content/Maps/Tests/L_F00_TimeLab.md` → `<ProjectRoot>/Content/Maps/Tests/L_F00_TimeLab.umap`;
+- `project/Content/Maps/L_KeyWestBlockout.md` → `<ProjectRoot>/Content/Maps/L_KeyWestBlockout.umap`;
 - `project/Config/DefaultGameplayTags.ini.md` → `<ProjectRoot>/Config/DefaultGameplayTags.ini`.
 
 `project/` — **текстовое зеркало**, не отдельная собранная игра и не директория, которую нужно скопировать в Unreal `Content`. `<ProjectRoot>` Claude определяет по фактически открытому `.uproject`. Не создавать пустые `Source`, `Plugins`, `Saved`, `Intermediate` и фиктивный `.uproject`; добавляем путь только когда для него появился реальный asset/настройка.
 
-[**Индекс F00 с порядком атомарной сборки**](project/README.md): сначала [Config](project/Config/DefaultGameplayTags.ini.md), затем [ST_SimStep](project/Content/Survival/Time/ST_SimStep.md), [BPI_SimStepReceiver](project/Content/Survival/Time/BPI_SimStepReceiver.md), [BP_SurvivalWorld](project/Content/Survival/Time/BP_SurvivalWorld.md), [BP_F00ClockProbe](project/Content/Tests/Survival/BP_F00ClockProbe.md), [L_F00_TimeLab](project/Content/Maps/Tests/L_F00_TimeLab.md).
+[**Индекс сборки**](project/README.md): сначала F−1 — готовый Epic Third Person Template (Blueprint, None) и [квартал Key West](project/Content/Maps/L_KeyWestBlockout.md); 727 не главный shelter. Затем F00 Config → Struct → Interface → Clock → opt-in probe. Внутренние папки — наше соглашение, не обязательная структура UE; штатные ассеты не дублировать.
 
 ## Атомарный build + обратная связь
 

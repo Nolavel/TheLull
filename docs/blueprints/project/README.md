@@ -1,67 +1,39 @@
-# TheLull — текстовое зеркало UE-проекта для сборки через Claude Code + Unreal MCP
+# Трафарет проекта TheLull
 
-**Статус:** только схема сборки. Это **не** локальный Unreal-проект и не копия `.uasset`/`.umap`. Реальный `.uproject` и существующие ассеты пока не проверены. Версия редактора проекта: **UE 5.8.4**; справка Epic — **UE 5.8**.
+[Манифест](../../gameplay/SURVIVAL_MANIFEST.md) · [Как собирать](../README.md) · [Backlog Claude](BACKLOG.md)
 
-**Процедура:** [`../README.md`](../README.md). **Обязательный фильтр каждого изменения:** [`../../gameplay/SURVIVAL_MANIFEST.md`](../../gameplay/SURVIVAL_MANIFEST.md). **Результаты и улучшения после сборки:** [`BACKLOG.md`](BACKLOG.md).
+Это текстовое зеркало **только создаваемых или изменяемых файлов** реального UE-проекта. `project/` не является вторым .uproject. Markdown хранится отдельно от настоящих бинарных ассетов. В UE `Content/` — ассеты/карты, `Config/` — настройки. Наши вложенные `Survival/Time`, `Maps`, `Tests` — соглашение по назначению, а не требование UE. Не создавать папки без реальной необходимости.
 
-## Правило соответствия путей
+## Сначала готовый шаблон Epic
 
-Корнем зеркала считаем **эту папку** `docs/blueprints/project/`. Вложенные имена совпадают с путями **внутри установленного проекта UE**, но расширение заменено на `.md` и содержимое — контракт. Пример:
+UE 5.8.4 → Games → Third Person → Blueprint → Variant None. [Epic docs — выбрать 5.8](https://dev.epicgames.com/documentation/en-us/unreal-engine/third-person-template-in-unreal-engine?application_version=5.8). Если локальный проект уже на шаблоне, сохранить существующие package paths (обычно `Content/ThirdPerson/`, `Content/Characters/`, input и level geometry). Имена сверить в открытом редакторе. Не дублировать готовые assets, не создавать на неизменённые файлы отдельные MD. Камеру/движение переработаем позже по реальным потребностям.
 
-```text
-docs/blueprints/project/Content/Survival/Time/BP_SurvivalWorld.md
-                                  ↓ Claude Code + Unreal MCP
-<ProjectRoot>/Content/Survival/Time/BP_SurvivalWorld.uasset
-                                  ↔ Package /Game/Survival/Time/BP_SurvivalWorld
-```
-
-**Нельзя** копировать Markdown из зеркала в настоящий `Content/` вместо ассета или объявлять mirror рабочим Unreal-проектом. Папки проекта, которым пока не соответствует ни одного реального нужного действия (`Plugins`, `Source`, `Saved`, `Intermediate`), **не создаём ради полноты дерева**. `Source` не нужен Blueprint-only эксперименту. `<ProjectRoot>` определяется через реально открытый `.uproject`, а не догадкой по пути.
-
-## Дерево уже запланированных объектов F00
+## Наши первые дополнения
 
 ```text
 project/
-├── README.md                      ← этот индекс
-├── BACKLOG.md                     ← журнал проверок и улучшений после сборки
 ├── Config/
-│   └── DefaultGameplayTags.ini.md  → Config/DefaultGameplayTags.ini
+│   └── DefaultGameplayTags.ini.md
 └── Content/
+    ├── Maps/
+    │   └── L_KeyWestBlockout.md
     ├── Survival/
     │   └── Time/
-    │       ├── ST_SimStep.md           → ST_SimStep.uasset
-    │       ├── BPI_SimStepReceiver.md  → BPI_SimStepReceiver.uasset
-    │       └── BP_SurvivalWorld.md     → BP_SurvivalWorld.uasset
-    ├── Tests/
-    │   └── Survival/
-    │       └── BP_F00ClockProbe.md    → BP_F00ClockProbe.uasset
-    └── Maps/
-        └── Tests/
-            └── L_F00_TimeLab.md       → L_F00_TimeLab.umap
+    │       ├── ST_SimStep.md
+    │       ├── BPI_SimStepReceiver.md
+    │       └── BP_SurvivalWorld.md
+    └── Tests/
+        └── Survival/
+            └── BP_F00ClockProbe.md
 ```
 
-Только **один целевой файл** на каждую MD-карточку. Общие планы и backlog в корне mirror **не являются** asset-трафаретами. Существует одна canonical-карточка на один package path.
+Пример: `project/Content/Maps/L_KeyWestBlockout.md` → `<ProjectRoot>/Content/Maps/L_KeyWestBlockout.umap` → `/Game/Maps/L_KeyWestBlockout`. Другие расширения .uasset и .ini соответственно. README/BACKLOG — служебные документы, не UE assets. Source/Plugins/Saved/Intermediate не создаём впрок. Любое изменение пути при обнаружении реального template согласуется, не плодит дублей.
 
-## Очерёдность сборки (строго по зависимостям)
+## Порядок
 
-1. **Preflight:** Claude открывает локальный `.uproject`, подтверждает actual UE **5.8.4**, структуру `Content`/`Config`, ветку `ue-claudeflow` и список **доступных инструментов текущего Unreal MCP**. Если проект не доступен — BLOCKED, не притворяться, что редактор открыт.
-2. **Config:** [`DefaultGameplayTags.ini.md`](Config/DefaultGameplayTags.ini.md); сначала прочитать оригинальный ini, затем добавлять только отсутствующие четыре тега, проверить в редакторе.
-3. **Struct:** [`ST_SimStep.md`](Content/Survival/Time/ST_SimStep.md).
-4. **Interface:** [`BPI_SimStepReceiver.md`](Content/Survival/Time/BPI_SimStepReceiver.md).
-5. **Actor:** [`BP_SurvivalWorld.md`](Content/Survival/Time/BP_SurvivalWorld.md).
-6. **Test Actor:** [`BP_F00ClockProbe.md`](Content/Tests/Survival/BP_F00ClockProbe.md).
-7. **Test Level:** [`L_F00_TimeLab.md`](Content/Maps/Tests/L_F00_TimeLab.md).
-8. **Inspection + PIE:** получить реальную структуру ассетов/графов, Compile, Save, PIE. Сопоставить **expected vs actual**. Пополнить [`BACKLOG.md`](BACKLOG.md) незафиксированными ошибками, слабостями паттерна и улучшениями. Только затем принимать следующий блок F01.
+1. **F−1**: preflight .uproject / UE 5.8.4 / template / реально доступные MCP operations.
+2. **F−1**: [L_KeyWestBlockout](Content/Maps/L_KeyWestBlockout.md), улицы, несколько укрытий, 727 не главный shelter. Проверка географии PR #340, камеры и перемещения в PIE.
+3. **F00**: [Config](Config/DefaultGameplayTags.ini.md) → [ST_SimStep](Content/Survival/Time/ST_SimStep.md) → [BPI_SimStepReceiver](Content/Survival/Time/BPI_SimStepReceiver.md) → [BP_SurvivalWorld](Content/Survival/Time/BP_SurvivalWorld.md) → [BP_F00ClockProbe](Content/Tests/Survival/BP_F00ClockProbe.md). Подключаем к той же карте; probe opt-in. Пустая TimeLab не нужна.
+4. После каждого asset Claude Code через MCP: build → Compile/Save → inspect → PIE → actual vs stencil → [BACKLOG](BACKLOG.md) → handoff Codex. Дальше F01 и последующие связи на этой карте.
 
-**Текущий реальный статус:** все шесть файлов — планы; их `.uasset`, `.umap`, `.ini` на машине автора через этот чат **не были созданы и не проверялись**. Наличие дерева GitHub не означает, что локальный проект содержит эти пути.
-
-## Источники UE 5.8 (не заменять на «5.9 по памяти»)
-
-- [Unreal Engine 5.8 Documentation](https://dev.epicgames.com/documentation/en-us/unreal-engine)
-- [Blueprint API Reference](https://dev.epicgames.com/documentation/en-us/unreal-engine/BlueprintAPI)
-- [Blueprint Class Assets](https://dev.epicgames.com/documentation/en-us/unreal-engine/blueprint-class-assets-in-unreal-engine)
-- [Blueprints Visual Scripting](https://dev.epicgames.com/documentation/en-us/unreal-engine/blueprints-visual-scripting-in-unreal-engine)
-- [Scripting and Automating the Unreal Editor](https://dev.epicgames.com/documentation/en-us/unreal-engine/scripting-and-automating-the-unreal-editor)
-- [Using Gameplay Tags](https://dev.epicgames.com/documentation/en-us/unreal-engine/using-gameplay-tags-in-unreal-engine)
-- [Automation Test Framework](https://dev.epicgames.com/documentation/en-us/unreal-engine/automation-test-framework-in-unreal-engine)
-
-Версия справочника Epic — **5.8**, а установленный hotfix проекта — **5.8.4**. Названия узлов, типов, pin и MCP-операций проверяются на фактически открытом редакторе **до сборки/приёмки**. Не использовать новые возможности 5.9, пока они не доказаны в 5.8.4.
+Официальная документация [UE 5.8](https://dev.epicgames.com/documentation/en-us/unreal-engine?application_version=5.8) и [Blueprint API](https://dev.epicgames.com/documentation/en-us/unreal-engine/BlueprintAPI?application_version=5.8): проверить версию в селекторе, пины и возможности в установленной 5.8.4. **Ни один из наших ассетов ещё не создан и PIE не проверялся.**

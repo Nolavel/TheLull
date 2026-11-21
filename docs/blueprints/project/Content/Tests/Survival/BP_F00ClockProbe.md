@@ -3,7 +3,7 @@
 **Mirror:** `docs/blueprints/project/Content/Tests/Survival/BP_F00ClockProbe.md` → **real project target:** `<ProjectRoot>/Content/Tests/Survival/BP_F00ClockProbe.uasset`.
 **Builder:** Claude Code + Unreal MCP в открытом UE 5.8.4; прежде чем запускать, проверять доступные MCP-операции и [Epic Blueprint API 5.8](https://dev.epicgames.com/documentation/en-us/unreal-engine/BlueprintAPI). Это не `.uasset`.
 **Контроль:** compile/save/inspect actual nodes + указанная ниже проверка; затем обновление [build backlog](../../../BACKLOG.md) в ветке Claude, если были расхождения.
-**Статус: `stencil drafted` (21.11.2026), не создан в UE.** Один файл — один Blueprint. Это test harness: в игровую карту TheLull не переносить.
+**Статус: `stencil drafted` (21.11.2026), не создан в UE.** Один файл — один Blueprint. Временный test harness на рабочей карте; в обычном PIE выключен, в релиз не включать.
 
 ```text
 Package: /Game/Tests/Survival/BP_F00ClockProbe
@@ -11,19 +11,20 @@ AssetType: Blueprint Class
 ParentClass: Actor
 Implements: BPI_SimStepReceiver
 DependsOn: ST_SimStep, BPI_SimStepReceiver, BP_SurvivalWorld, Gameplay Tag Time.Advance.Debug
-PlacedIn: /Game/Maps/Tests/L_F00_TimeLab (ровно 1 instance)
+PlacedIn: /Game/Maps/L_KeyWestBlockout (ровно 1 instance)
 ```
 
 ## Собрать в UE 5.8.4
 1. Content Browser → `/Game/Tests/Survival/` → Blueprint Class → Actor → `BP_F00ClockProbe`.
 2. Class Settings → Implemented Interfaces → `BPI_SimStepReceiver`. Compile.
-3. Поставить один instance рядом с `BP_SurvivalWorld` на `L_F00_TimeLab`.
-4. Создать переменные/реализации ниже. `bSingleCall` сделать **Instance Editable**. Start with Tick Enabled = false; Event Tick не использовать.
-5. Compile, Save, Play In Editor (PIE). Ожидается печать PASS/FAIL, но этот результат пока не снят.
+3. Поставить один instance рядом с `BP_SurvivalWorld` на `L_KeyWestBlockout`.
+4. Создать переменные/реализации ниже. `bSingleCall` и `bRunProbe` сделать **Instance Editable**; bRunProbe=false по умолчанию. Start with Tick Enabled = false; Event Tick не использовать.
+5. Compile, Save, установить bRunProbe=true только для отдельного PIE теста; после вернуть false. Play In Editor (PIE). Ожидается печать PASS/FAIL, но этот результат пока не снят.
 
 ## Variables
 | Name | UE type | Default | Purpose |
 |---|---|---|---|
+| `bRunProbe` | Boolean | false | Instance Editable; true только для отдельного PIE теста |
 | `bSingleCall` | Boolean | true | true: один час одним Advance; false: четыре раза по 15 мин |
 | `Clock` | BP_SurvivalWorld Object Reference | None | найденный instance, read/call, **не владелец времени** |
 | `StartSeconds` | Double | 0 | baseline для проверки |
@@ -36,6 +37,7 @@ PlacedIn: /Game/Maps/Tests/L_F00_TimeLab (ровно 1 instance)
 
 ```text
 event BeginPlay() {
+    if (NOT bRunProbe) return
     Delay(Duration=0.1) // ONLY test harness: allow all actors to finish BeginPlay
     let Found:Array<BP_SurvivalWorld> = GetAllActorsOfClass(BP_SurvivalWorld)
     if (Found.Length != 1) {
@@ -92,7 +94,7 @@ event SimulateStep(Step:ST_SimStep) { // Interface event
 `FormatText`, `NearlyEqual`, `GetAllActorsOfClass`, `Delay`, `ForLoop`, Print String — штатные Blueprint nodes; реальное имя и тип конкретного pin подтвердить в UE перед отметкой `asset assembled`. В actual Blueprint сборке условия `Passed` собрать логическими Boolean nodes, а форматирование — `Format Text`. **Это не исполняемый исходный код.**
 
 ## Проверка
-1. PIE запуск c `bSingleCall=true` → `time=32400`, `steps=4`, `received=3600`, PASS.
+1. PIE запуск с bRunProbe=true, `bSingleCall=true` → `time=32400`, `steps=4`, `received=3600`, PASS.
 2. Остановить PIE, установить `bSingleCall=false`; повторить → **те же числа**.
 3. Отдельно вызвать `Clock.AdvanceGameTime(-60.0, Time.Advance.Debug)`: false, ничего не изменилось.
 4. Вызвать `RegisterParticipant(Self)` второй раз: false, duplicate не добавлен.

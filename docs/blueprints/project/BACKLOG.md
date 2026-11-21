@@ -6,9 +6,13 @@
 
 ## Не выполнено / ожидает локальной проверки
 
+- **F−1-001 | NOT RUN:** подтвердить существующий Third Person Template, пакеты, camera/movement baseline в UE 5.8.4. Owner: Claude local.
+- **F−1-002 | BLOCKED source identification:** PR #340, точные tower/gas IDs, bbox, две дополнительные shelter candidates; 727 не главный shelter. Owner: Claude + Codex handoff.
+- **F−1-003 | NOT RUN:** собрать L_KeyWestBlockout, коллизии, маршруты и ≥2 укрытия; проверить в PIE. Owner: Claude local.
+
 - **PRE-001 | BLOCKED pending editor:** путь и версия **открытого** `.uproject` неизвестны; каталог реально созданных ассетов не прочитан; нет подтверждения запущенного UE 5.8.4. Owner: Claude Code (local).
 - **PRE-002 | BLOCKED pending MCP:** нет результатов capability inventory установленного **Unreal MCP** (создание Structure, Interface, Blueprint Class, заполнение graph pins/links, создание level, Compile, Save, PIE, чтение actual graphs). Owner: Claude Code (local). Если нужная операция отсутствует, записать как блокировку, а не заменять её выдуманным endpoint.
-- **F00-001 | NOT RUN:** Config + ST + BPI + BP + probe + level собраны по MD? Нужно Compile/Save и доказательство сохранения пакетов. Owner: Claude Code (local).
+- **F00-001 | NOT RUN:** Config + ST + BPI + BP + opt-in probe на готовом квартале собраны по MD? Нужно Compile/Save и доказательство сохранения пакетов. Owner: Claude Code (local).
 - **F00-002 | NOT RUN:** разбиение 3600 s vs 4×900 s, запрет двойной регистрации, запрет отрицательного времени, Restore без симуляции; фактические результаты PIE не получены. Owner: Claude Code (local).
 - **F00-003 | NOT RUN:** текст ↔ actual asset graph → diff по переменным, типам, пинам, owner state и API; изменение каждого спорного места через отдельное согласование. Owner: Claude Code (local).
 

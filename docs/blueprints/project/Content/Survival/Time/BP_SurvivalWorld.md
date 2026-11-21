@@ -10,7 +10,7 @@ Package: /Game/Survival/Time/BP_SurvivalWorld
 AssetType: Blueprint Class
 ParentClass: Actor
 DependsOn: ST_SimStep, BPI_SimStepReceiver, Gameplay Tags settings
-PlacedIn: /Game/Maps/Tests/L_F00_TimeLab (ровно 1 instance)
+PlacedIn: /Game/Maps/L_KeyWestBlockout (ровно 1 instance)
 ```
 
 ## Почему именно он первый
@@ -23,7 +23,7 @@ PlacedIn: /Game/Maps/Tests/L_F00_TimeLab (ровно 1 instance)
 2. Content Browser → Blueprint Class → Actor → `BP_SurvivalWorld`. Compile/Save.
 3. В Class Defaults: выключить `Start with Tick Enabled`. **Event Tick не реализовывать.**
 4. Создать переменные и функции ниже; затем Graph; Compile/Save.
-5. Создать пустой уровень `L_F00_TimeLab` в `/Game/Maps/Tests/`. Разместить **один** экземпляр `BP_SurvivalWorld`. Уровень — отдельный `.umap`, не Blueprint и не обязан иметь собственный stencil.
+5. Разместить ровно один BP_SurvivalWorld на уже созданной карте `/Game/Maps/L_KeyWestBlockout` после F−1; отдельную пустую карту не создавать.
 
 ## Variables
 
@@ -147,7 +147,7 @@ function AdvanceGameTime(DeltaGameSeconds:Double, Reason:GameplayTag) -> bAccept
 
 ## Проверка в PIE (обязательна до `asset assembled` → `PIE tested`)
 
-1. Собрать `BP_F00ClockProbe` по отдельному трафарету, запустить тестовый уровень.
+1. Собрать BP_F00ClockProbe, включить bRunProbe только для отдельного PIE прогона на квартале; затем выключить.
 2. Два запуска с одинаковым 08:00: `AdvanceGameTime(3600)` против четырёх `AdvanceGameTime(900)`. В обоих `WorldTimeSeconds=32400`, `TotalReceivedSeconds=3600`, `StepCallCount=4`.
 3. `AdvanceGameTime(-60)` → false, часы и probe неизменны; повторная регистрация одного участника не создаёт повторного вызова.
 4. Если receiver попытается вызвать `AdvanceGameTime` внутри `SimulateStep`, вложенный вызов отвергается (bIsAdvancing). В тестовом probe это можно проверить позднее без добавления такого поведения в production.

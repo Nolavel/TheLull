@@ -3,7 +3,7 @@
 **21.11.2026. Статус: исследовательская исходная карта, не утверждение новых механик, не баланс, не работающий Blueprint.**  
 Ветка: `ue-codex`; `production` не изменять. Прежде чем придумывать очередную D-серию, исследовать источник → проверить существующий опыт Hoarbound → вывести TheLull/Key West-специфику → сформулировать исполнимый контракт UE → проверить один реальный игровой выбор.
 
-**Рабочий статус 21.11.2026:** этот документ — исследование, а не набор готовых ассетов. Его обязательная нормативная рамка — [манифест](../SURVIVAL_MANIFEST.md). **Первый реальный путь в редактор:** `ST_SimStep` → `BPI_SimStepReceiver` → `BP_SurvivalWorld` → `BP_F00ClockProbe` по [трафаретам зеркального UE-проекта](../../blueprints/project/README.md); Claude Code создаёт и проверяет реальные assets через Unreal MCP, затем пишет backlog, статус пока только MD. В F00 сначала проверяется честный clock; room/body/heat и полная приёмка 727 относятся к F01–F05, не выдаются за собранное.
+**Актуальное решение автора 21.11.2026:** сначала Epic Third Person Template + [квартал Key West](../../blueprints/project/Content/Maps/L_KeyWestBlockout.md) с несколькими укрытиями; 727 не главный shelter. Затем F00 clock, opt-in probe, остальные связи по [манифесту](../SURVIVAL_MANIFEST.md). UE assets ещё не собраны.
 
 ## 0. Не начинаем с агента и не начинаем с одежды
 
@@ -45,7 +45,7 @@ ENVIRONMENT <--> SHELTER / HEAT / WATER / FOOD
 
 ## 2. Порядок строительства всей survival-грамматики
 
-`F00 / Time + state` → `F01 / Climate and shelter` → `F02 / Body (cold, fatigue, hunger, thirst, condition)` → `F03 / Resources and equipment` → `F04 / Actions with time, interruption and consequences` → `F05 / Day-exit-return-night` → `F06 / Player discovery and feedback`.
+`F−1 / Third Person + Key West blockout` → `F00 / Time + state` → `F01 / Climate and shelter` → `F02 / Body (cold, fatigue, hunger, thirst, condition)` → `F03 / Resources and equipment` → `F04 / Actions with time, interruption and consequences` → `F05 / Day-exit-return-night` → `F06 / Player discovery and feedback`.
 
 Первые пять — **зависимости реализации**; их не нужно растягивать на 5 отдельных новых симуляционных лабораторий. Изучаем известные образцы, потом собираем UE-проверку. Каждая новая переменная должна иметь **собственника, источник изменения, потребителя, save-contract и проверяемую альтернативу**.
 
@@ -58,7 +58,7 @@ ENVIRONMENT <--> SHELTER / HEAT / WATER / FOOD
 | `BP_SurvivalWorld` (Actor) | `WorldTimeSeconds: Double`; `AdvanceGameTime(DeltaGameSeconds: Double, Reason: GameplayTag)`; `GetWorldTime` | **Единственный писатель clock**. Все действия вызывают API; UI/свет читают |
 | `ST_SimStep` (Blueprint Struct) | `StartSeconds: Double`, `EndSeconds: Double`, `DeltaSeconds: Double`, `Reason: GameplayTag` | Создаёт мировой clock; systems consume |
 | `BPC_Climate` (ActorComponent на world actor) | `AirTemperatureC: Float`, `WindSpeedMps: Float`, `WindDirection: Vector`, `WeatherState: GameplayTag` | Climate writes; room/route/body read. Погода **не знает** намерение игрока |
-| `BPC_RoomThermal` (ActorComponent на actor комнаты 727) | `ZoneId: Name`, `TemperatureC: Float`, `WindExposure01: Float`, `SealedFraction01: Float`, `HeatInput` (поток, пока без предрешённых единиц), `StoredHeat` (внутренняя модель) | Room writes; body и визуализация read. **Тёплая комната**, а не булевое `bIsIndoorSafe` |
+| `BPC_RoomThermal` (ActorComponent на actor комнаты выбранного shelter) | `ZoneId: Name`, `TemperatureC: Float`, `WindExposure01: Float`, `SealedFraction01: Float`, `HeatInput` (поток, пока без предрешённых единиц), `StoredHeat` (внутренняя модель) | Room writes; body и визуализация read. **Тёплая комната**, а не булевое `bIsIndoorSafe` |
 | `BPC_SurvivalBody` (ActorComponent на Henry) | `CoreTemperatureC: Float`, `Calories: Float`, `Hydration: Float`, `Fatigue01: Float`, `Condition01: Float` | Body writes. Подсистемы условий воздействуют через единый update; HUD read-only. Конкретная шкала и пороги — **не баланс из Python** |
 | `ST_ActionRequest` (Blueprint Struct) | `ActionId: GameplayTag`, `Target: Actor Reference`, `DurationGameSeconds: Double`, `bInterruptible: Boolean` | Вызывает player/action; не содержит «добычу дров» как жёсткое свойство |
 | `BPC_TimeActionRunner` (ActorComponent) | `CanStartAction`, `StartAction`, `StopAction`, `OnActionCompleted/Cancelled` | **Единственный инициатор оплаты длительных действий через World**. Gameplay target owner выдаёт/списывает ресурс строго один раз |
@@ -69,7 +69,7 @@ ENVIRONMENT <--> SHELTER / HEAT / WATER / FOOD
 ### Последовательность одного рабочего Blueprint-события
 
 ```text
-PLAYER presses Interact on 727 window
+PLAYER presses Interact on selected shelter window
   → Window.CanSeal() verifies valid board and window state
   → BPC_TimeActionRunner.StartAction(SealWindow)
   → BP_SurvivalWorld.AdvanceGameTime(requested slice, Reason=Action)
@@ -89,7 +89,7 @@ PLAYER presses Interact on 727 window
 
 ### Первый acceptance-сценарий в UE (не агент, не будущие исследования)
 
-Точка: **одна холодная комната 727 Fort Street, одна доступная щель/окно, одна печь, конечные дрова, одна доска**.
+Точка: **одна холодная комната выбранного укрытия, одна доступная щель/окно, одна печь, конечные дрова, одна доска**.
 
 Игрок сам решает:
 - потратить время и доску на снижение утечки;
@@ -111,16 +111,16 @@ PLAYER presses Interact on 727 window
 
 | Доказанный факт места | Исследуемая игровая гипотеза | Кандидат для UE | Проверка в TheLull |
 |---|---|---|---|
-| Исторические дома имели большие окна, shutters, веранды, вентиляционные элементы | В морозных условиях защита от сквозняка и выбор **одной пригодной комнаты** важнее «вошёл внутрь = тепло» | `FRoomThermalState.SealedFraction01`, `AirLeakageFactor`; `BPC_RoomThermal` | 727 до/после одного ремонта; отдельное сравнение от расхода топлива |
+| Исторические дома имели большие окна, shutters, веранды, вентиляционные элементы | В морозных условиях защита от сквозняка и выбор **одной пригодной комнаты** важнее «вошёл внутрь = тепло» | `FRoomThermalState.SealedFraction01`, `AirLeakageFactor`; `BPC_RoomThermal` | выбранное укрытие до/после одного ремонта; отдельное сравнение от расхода топлива |
 | Улицы, здания и заборы реального города формируют пространственные коридоры | Ветер и экспозиция маршрута создают отличия даже между двумя близкими дорогами | `FRouteSegment.Exposure01`, `WindOcclusion01` | Сравнить путь вдоль защищённых домов и открытый участок; игрок сам читает признаки |
 | На острове морская вода окружает город; существование питьевого ресурса не следует из воды на карте | Поиск **питьевой** воды и источник тепла могут конкурировать с обогревом и сушкой | `Item.WaterPotability`, `WaterVolumeL`, `ProcessHeatDemand` **гипотеза** | Сначала подтвердить инфраструктуру/доступность пресной воды и реальные процессы, затем экспериментировать |
 | Много деревянных и отличающихся по типологии построек | «Разобрать дом на топливо» может влиять на его пригодность как убежища, не только на inventory | `ResourceSourceId`, `RemainingMaterial`, `ShelterIntegrity` **гипотеза** | Одна доска: закрыть проём или израсходовать на другую цель; без дублирования ресурсов |
 
-**Не переносить в код без дополнительного исследования:** абсолютные показатели теплопередачи конкретного дома, поведение морской воды при вымышленной экстремальной зиме, географически «автоматическую» доступность пресной воды, свойства всех деревянных строений, snow/ice как идентичный северной Канаде. Конкретный 727 и First Exit A — реальные production-референсы, но изменять их сцены без отдельного решения автора нельзя.
+**Не переносить в код без дополнительного исследования:** абсолютные показатели теплопередачи конкретного дома, поведение морской воды при вымышленной экстремальной зиме, географически «автоматическую» доступность пресной воды, свойства всех деревянных строений, snow/ice как идентичный северной Канаде. 727 и First Exit A — исторические референсы Hoarbound; статус 727 как главного shelter отменён для TheLull.
 
 ## 5. Шаблон следующей карточки: одна связь → одна Blueprint-проверка
 
-**ID / рабочее название:** `F01 | 727 window sealing → room heat retention`  
+**ID / рабочее название:** `F01 | shelter window sealing → room heat retention`  
 **Зачем игроку:** что именно становится возможно после действия, и с чем оно конкурирует?  
 **База в жанре (источник):** факт + версия/ссылка, не «в TLD вроде было».  
 **Hoarbound:** код или наблюдение; `implemented` / `verified in build` / `planned`.  
@@ -144,4 +144,4 @@ PLAYER presses Interact on 727 window
 - [Epic, UE 5.8 Actor / Component / DataAsset](https://dev.epicgames.com/documentation/unreal-engine/game-objects-in-unreal-engine?lang=en-US)
 - [Epic, UE 5.8 SaveGame API](https://dev.epicgames.com/documentation/unreal-engine/API/Runtime/Engine/USaveGame?application_version=5.8)
 - [TLD→TheLull research protocol](TRANSLATION_TO_THELULL.md)
-- [TheLull research mandate](RESEARCH_MANDATE.md)
+- [TheLull survival manifesto](../SURVIVAL_MANIFEST.md)
