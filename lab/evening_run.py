@@ -32,6 +32,33 @@ def play(option_label: str, outside_c: float, room: Room, body: Body, beliefs: E
     if work is not None and body.stamina < work.stamina_cost:
         raise ValueError("недостаточно кратковременной выносливости для работы")
     log, hour = [], 0.0
+    slept, awake_h, wakes = 0.0, 0.0, []
+    fire_out_at, coldest, hypo_hours = None, body.core_c, 0.0
+    burn_rate_lower_bound = None
+
+    def stopped() -> dict:
+        actual = hour + slept + awake_h
+        log.append(f"{actual:.4f} ч: дальнейшее действие невозможно ({body.terminal_reason})")
+        return {
+            "option": option_label,
+            "terminal": body.terminal_reason,
+            "terminal_at_minute": body.terminal_at_minute,
+            "observed_burn_rate": None,
+            "burn_rate_lower_bound": burn_rate_lower_bound,
+            "night_elapsed_h": round(actual, 6),
+            "slept_hours": round(slept, 6), "awake_at_night_h": round(awake_h, 6),
+            "woke_cold": len(wakes), "wake_events": wakes,
+            "went_to_bed_at": round(hour, 6),
+            "fire_out_at": fire_out_at, "hours_below_hypothermic": round(hypo_hours, 6),
+            "coldest_core_c": min(coldest, body.core_c),
+            "morning_fatigue": round(body.fatigue), "morning_stamina": round(body.stamina),
+            "packed_for_morning": body.packed,
+            "morning_core_c": round(body.core_c, 4),
+            "fuel_left": round(room.fuel, 4), "sleep_refused": None, "log": log
+        }
+
+    if body.terminal:
+        return stopped()
 
     if work is not None:
         # A long action owns game time: the room keeps cooling and the body keeps tiring while it runs.
@@ -39,9 +66,11 @@ def play(option_label: str, outside_c: float, room: Room, body: Body, beliefs: E
         while worked < work.hours:
             step = min(STEP_H, work.hours - worked)
             room.step(step)
-            step_body(body, room, outside_c, step, asleep=False, fatigue_per_h=work.fatigue_per_h)
-            worked += step
-            hour += step
+            actual = step_body(body, room, outside_c, step, asleep=False, fatigue_per_h=work.fatigue_per_h)
+            worked += actual
+            hour += actual
+            if body.terminal:
+                return stopped()  # no instant fuel/work reward for an unfinished action
         body.stamina = max(0.0, body.stamina - work.stamina_cost)
         room.fuel += work.fuel
         if work is HEAVY:
@@ -70,9 +99,11 @@ def play(option_label: str, outside_c: float, room: Room, body: Body, beliefs: E
         waited = 0.0
         while sleep_refusal(room, body, outside_c) and room.fire_lit and waited < 3.0:
             room.step(STEP_H)
-            step_body(body, room, outside_c, STEP_H, asleep=False, fatigue_per_h=IDLE_FATIGUE_PER_H)
-            waited += STEP_H
-            hour += STEP_H
+            actual = step_body(body, room, outside_c, STEP_H, asleep=False, fatigue_per_h=IDLE_FATIGUE_PER_H)
+            waited += actual
+            hour += actual
+            if body.terminal:
+                return stopped()
         log.append(f"{hour:4.1f} ч: ждал, пока комната прогреется ({waited:.1f} ч), "
                    f"в комнате {room.felt_c(outside_c):.0f}°")
     refusal = sleep_refusal(room, body, outside_c)
@@ -80,9 +111,7 @@ def play(option_label: str, outside_c: float, room: Room, body: Body, beliefs: E
         log.append(f"{hour:4.1f} ч: лечь не вышло — {refusal}")
 
     night_hours = max(0.0, hours_of_night - hour)
-    fire_out_at, coldest, hypo_hours = None, body.core_c, 0.0
-    slept, awake_h, wakes = 0.0, 0.0, []
-    burn_rate_lower_bound = None
+    coldest = min(coldest, body.core_c)
     asleep = refusal is None
     while slept + awake_h + 1e-8 < night_hours:
         was_lit = room.fire_lit
@@ -102,13 +131,17 @@ def play(option_label: str, outside_c: float, room: Room, body: Body, beliefs: E
                 asleep = False
             elif not room.fire_lit and room.furniture > 0 and room.has_axe and body.stamina >= HEAVY.stamina_cost and (
                 night_hours - slept - awake_h >= HEAVY.hours):
-                room.furniture -= 1
-                body.stamina = max(0.0, body.stamina - HEAVY.stamina_cost)
-                # Work progresses on the SAME game clock as fire and temperature.
+                # Work progresses on the SAME clock. An interrupted action
+                # yields neither fuel nor completed furniture conversion.
                 for _ in range(int(round(HEAVY.hours / STEP_H))):
                     room.step(STEP_H)
-                    step_body(body, room, outside_c, STEP_H, asleep=False, fatigue_per_h=HEAVY.fatigue_per_h)
-                    awake_h += STEP_H
+                    actual = step_body(body, room, outside_c, STEP_H, asleep=False,
+                                       fatigue_per_h=HEAVY.fatigue_per_h)
+                    awake_h += actual
+                    if body.terminal:
+                        return stopped()
+                room.furniture -= 1
+                body.stamina = max(0.0, body.stamina - HEAVY.stamina_cost)
                 room.fuel += HEAVY.fuel
                 room.fire_lit = True
                 wakes.append({"at": round(at, 1), "core_c": round(woke_at_c, 1),
@@ -125,12 +158,14 @@ def play(option_label: str, outside_c: float, room: Room, body: Body, beliefs: E
             asleep = True
             log.append(f"{hour + slept + awake_h:4.1f} ч: согрелся — снова лёг")
         room.step(STEP_H)
-        step_body(body, room, outside_c, STEP_H, asleep=asleep,
-                  fatigue_per_h=0.0 if asleep else IDLE_FATIGUE_PER_H)
+        actual = step_body(body, room, outside_c, STEP_H, asleep=asleep,
+                           fatigue_per_h=0.0 if asleep else IDLE_FATIGUE_PER_H)
         if asleep:
-            slept += STEP_H
+            slept += actual
         else:
-            awake_h += STEP_H
+            awake_h += actual
+        if body.terminal:
+            return stopped()
         if was_lit and not room.fire_lit and fire_out_at is None:
             fire_out_at = hour + slept + awake_h
             log.append(f"{fire_out_at:4.1f} ч: огонь погас, комната начала остывать")
@@ -147,9 +182,10 @@ def play(option_label: str, outside_c: float, room: Room, body: Body, beliefs: E
     if room.fire_lit and not wakes and fuel_at_ignition > room.fuel and fire_elapsed > 0.25:
         observed_burn_rate = round((fuel_at_ignition - room.fuel) / fire_elapsed, 3)
 
-    return {"option": option_label, "observed_burn_rate": observed_burn_rate,
+    return {"option": option_label, "terminal": None, "terminal_at_minute": None,
+            "observed_burn_rate": observed_burn_rate,
             "burn_rate_lower_bound": burn_rate_lower_bound,
-            "night_elapsed_h": round(hours_of_night, 2),
+            "night_elapsed_h": round(hour + slept + awake_h, 6),
             "slept_hours": round(slept, 1), "awake_at_night_h": round(awake_h, 1),
             "woke_cold": len(wakes), "wake_events": wakes, "went_to_bed_at": round(hour, 1),
             "fire_out_at": round(fire_out_at, 1) if fire_out_at is not None else None,
