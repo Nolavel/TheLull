@@ -84,15 +84,19 @@ def evaluate(seed: int, variant: str, multiplier: int) -> dict:
             "prepared_no_movement": ("movement",),
             "prepared_heat_only": ("stamina", "movement"),
         }.get(arm, ())
-        gear = AblatedEquipment(wetness=1.0, disabled=disabled)
+        gear = AblatedEquipment(wetness=1.0)  # all initial physical preparations identical
         fuel_at_start = room.fuel
         if arm != "wet_now":
             room.fire_lit = room.fuel > 0
             _advance(body, room, world, gear, DRYING_MINUTES,
                      at_home=True, work=(DRY if arm != "heated_wet" else ""))
+        # Only the EXPEDITION is ablated. Every prepared arm must have the
+        # exact same body, clothing wetness, clock and spent fuel at departure.
+        gear.disabled = frozenset(disabled)
         departed_at = body.elapsed_minutes
         core_at_departure = body.core_c
         stamina_at_departure = body.stamina
+        fuel_at_departure = room.fuel
         available_fire_hours = room.fire_hours_total
         activity = {"stamina_demand": 0.0, "extra_fatigue": 0.0,
                     "walked_h": 0.0, "minimum_stamina": body.stamina,
@@ -123,6 +127,7 @@ def evaluate(seed: int, variant: str, multiplier: int) -> dict:
             "departure_minute": round(departed_at, 5),
             "travel_minutes": round(sum(x["minutes_billed"] for x in legs), 5),
             "core_at_departure": round(core_at_departure, 5),
+            "fuel_at_departure": round(fuel_at_departure, 5),
             "core_after_route": round(body.core_c, 5),
             "stamina_at_departure": round(stamina_at_departure, 5),
             "stamina_after_route": round(body.stamina, 5),
@@ -179,8 +184,9 @@ def study(seeds: int = 30) -> dict:
                 for arm in ARMS[2:]:
                     r = v[arm]
                     if (abs(r["departure_minute"]-dry["departure_minute"]) > .0001
-                        or abs(r["fuel_remaining"]-dry["fuel_remaining"]) > .001
-                        and not r["legs"]):
+                        or abs(r["fuel_at_departure"]-dry["fuel_at_departure"]) > .001
+                        or abs(r["core_at_departure"]-dry["core_at_departure"]) > .001
+                        or abs(r["stamina_at_departure"]-dry["stamina_at_departure"]) > .001):
                         checks["preparation_not_matched"] += 1
                 if abs(control["departure_minute"]-dry["departure_minute"]) > .0001:
                     checks["same_departure"] += 1
