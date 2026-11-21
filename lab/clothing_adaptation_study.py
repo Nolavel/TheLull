@@ -50,7 +50,8 @@ def make_world(variant: str, multiplier: int) -> World:
 
 def choose_clothing(agent: Agent, body: Body, room: Room, gear: Equipment,
                     *, assume_storm: bool = False,
-                    consider_prediction_error: bool = False) -> Decision:
+                    consider_prediction_error: bool = False,
+                    contextual_adjustment: float = 0.0) -> Decision:
     """A decision from subjective route beliefs, not the real route or weather."""
     # This study commits to the SINGLE direct edge used by the physical
     # counterfactual. Calling Agent.path() could choose a shorter detour,
@@ -99,6 +100,9 @@ def choose_clothing(agent: Agent, body: Body, room: Room, gear: Equipment,
             + 0.015 * max(0.0, error["minutes"])
         )
         expected_benefit += surprise_score
+    # D1.7 opt-in: context-specific *signed* evidence, neither a mandatory
+    # drying trigger nor a statement of certainty about the source of risk.
+    expected_benefit += contextual_adjustment
     # Time+fuel have competing uses. Not scaled to guarantee a win.
     fuel_scarcity = 0.4 if room.fuel <= 2 else 0.3
     expected_cost = DRY_TIME_H*0.80 + DRY_FUEL*fuel_scarcity
@@ -140,6 +144,7 @@ def choose_clothing(agent: Agent, body: Body, room: Room, gear: Equipment,
                 f"ходьбы {anticipated_saved_minutes:.2f} мин; "
                 f"добавочная страховка от пережитой ошибки: {surprise_score:.2f} "
                 f"(включена: {consider_prediction_error}); "
+                f"контекстная поправка: {contextual_adjustment:+.2f}; "
                 f"отдых перед работой вероятно сэкономлен: {avoid_rest}"),
     )
 
