@@ -40,10 +40,10 @@ jobs:
           for pattern,d in r["by_pattern"].items():
               print(f"| {pattern} | {d.get('naive_dry',0)} | {d.get('contextual_dry',0)} | {d.get('informed_wait',0)} | {d.get('context_vs_last_changes',0)} |")
           print("\\n### Physical next-trip outcome on identical unseen future")
-          print("| Policy | Cases | Dry | Wait | Returns | Completed later work | Mean fuel | Mean time h |")
-          print("|---|---:|---:|---:|---:|---:|---:|---:|")
+          print("| Policy | Cases | Dry | Wait | Returns | Completed later work | Mean fuel | Mean time h | Pareto-dominated | Return possible via alternative |")
+          print("|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|")
           for mode,d in r["policy_outcomes"].items():
-              print(f"| {mode} | {d['trials']} | {d['dry']} | {d['wait']} | {d['returns']} | {d['work_completed']} | {d['mean_fuel']} | {d['mean_route_plus_preparation_h']} |")
+              print(f"| {mode} | {d['trials']} | {d['dry']} | {d['wait']} | {d['returns']} | {d['work_completed']} | {d['mean_fuel']} | {d['mean_route_plus_preparation_h']} | {d['pareto_dominated']} | {d['return_possible_elsewhere']} |")
           print("\\n### Divergent examples (NOT optimized)")
           for ex in r["changed_choices"][:6]:
               print(f"- {ex['case']}: {ex['legacy']} → {ex['contextual']}; evidence={ex['assessment']}")
