@@ -4,6 +4,8 @@
 
 Источники критериев: [манифест](../../gameplay/SURVIVAL_MANIFEST.md), [структура mirror](README.md), [Epic UE 5.8](https://dev.epicgames.com/documentation/en-us/unreal-engine), [Blueprint API 5.8](https://dev.epicgames.com/documentation/en-us/unreal-engine/BlueprintAPI).
 
+**Статус F00, 21.11.2026:** исправленный пакет из `ue-codex@1b15f38c4978167bb6e6f8a3fd190ba6cf31100b` опубликован в production как **revised draft / NEEDS RE-REVIEW**, не как готовое задание на сборку. Claude Cloud подтвердил исправление десяти замечаний, но полное повторное инженерное ревью каждого MD не завершено. Никаких UE-ассетов, Compile/PIE этим переносом не получено. Local может готовить окружение независимо; сборка конкретного трафарета — после его ревью и проверки MCP.
+
 ## Не выполнено / ожидает локальной проверки
 
 - **F−1-001 | NOT RUN:** подтвердить существующий Third Person Template, пакеты, camera/movement baseline в UE 5.8.4. Owner: Claude local.
@@ -21,6 +23,9 @@
 - **PRE-003 | OPEN — pre-build stencil review:** Claude Cloud перепроверяет трафареты до локальной сборки, фиксирует SHA, технические замечания, точные исправления и статус REVIEWED / NEEDS REVISION / LOCAL VERIFICATION REQUIRED. Codex исправляет; Local получает обдуманный согласованный snapshot. Не заявлять PIE. Owner: Claude Cloud + Codex.
 
 - **F00-004 | NEEDS RE-REVIEW:** Claude Cloud [review](https://github.com/Nolavel/TheLull/issues/3#issuecomment-7059415969) points 1–10 addressed in revised stencils: Float subtype, explicit initialization, enum/cache, private writer, duplicate clock, target loop, derived delta, rejection reasons, cleanup. Re-review required prior to local handoff. Local verification of actual precision, Map, graph nodes, pins and PIE remains OPEN. Existing textual checker only covers Event graph; function graphs and other asset types require separate inspection.
+
+- **PRE-004 | OPEN — calibration:** после настройки проекта и MCP и pre-review выбранного MD выполнить минимальный цикл на E_SimPhase (Save/reopen/inspect); если доступны зависимости, проверить применение enum в Blueprint и PIE, иначе оставить PIE NOT RUN. 24.11.2026 — сначала setup, не обязательная сборка. Owner: Claude Local.
+- **DESIGN-001 | OPEN — hypothesis from lab:** экономика мира может определять исход сильнее выбора игрока; план на завтра может не менять вечер. Не считать установленным фактом UE. Проверять на F01–F05 причинные связи, конечные ресурсы и разные решения в одной игровой ситуации. Owner: Codex.
 
 ## Шаблон каждой новой записи (пополняет Claude Local после операции MCP)
 
