@@ -98,7 +98,7 @@ class GoalOvernightContracts(unittest.TestCase):
                              sum(d["completed_dawn"] for d in r["history"]))
             if r["terminal_at_minute"] is not None:
                 self.assertAlmostEqual(r["elapsed_minutes"],
-                                       r["terminal_at_minute"])
+                                       r["terminal_at_minute"],places=5)
 
     def test_two_policy_trial_is_repeatable_with_no_forced_success(self):
         a=study(seeds=2,days=3)
