@@ -1,0 +1,62 @@
+name: clothing-preparation-payoff
+
+on:
+  push:
+    branches: [ue-codex]
+    paths:
+      - "lab/**"
+      - ".github/workflows/clothing-preparation-payoff.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  paired-counterfactual:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Thermal, stamina, movement and opportunity-cost contracts
+        run: python3 -m unittest lab.tests.test_clothing_payoff_study -v
+      - name: Multi-distance same-seed clothing study with ablations
+        run: |
+          mkdir -p research-results
+          python3 -m lab.clothing_payoff_study --seeds 30 --json research-results/preparation-payoff.json | tee research-results/summary.json
+          python3 - <<'PY' | tee -a "$GITHUB_STEP_SUMMARY"
+          import json
+          r=json.load(open("research-results/preparation-payoff.json",encoding="utf-8"))
+          print("## Does drying clothing pay off? — triad vs scarce time/fuel")
+          print("The identical 90min fire without drying controls for heating; ablations isolate channels AFTER identical drying.")
+          print(f"{r['design']['runs']} simulated arms, {r['design']['cases']} matched cases. No human fun data.")
+          print("| World | Route multiplier | Actor choice | Wet leave now: finished / mins / fuel | Fire 90min but stay wet: finished / mins / fuel | Dry before leaving: finished / mins / fuel | Dry core / stamina after trip |")
+          print("|---|---:|---|---|---|---|---|")
+          for variant,bylen in r["by_world_distance"].items():
+              for length,block in bylen.items():
+                  a=block["arms"]
+                  def fmt(x):
+                      v=a[x]
+                      return f"{v['finished']}/{r['design']['seeds']} / {v['mean_total_minutes']} / {v['mean_total_fuel_burned']}"
+                  prepared=a["prepared_all"]
+                  print(f"| {variant} | {length} | {block['agent_morning_choice']} | {fmt('wet_now')} | {fmt('heated_wet')} | {fmt('prepared_all')} | {prepared['mean_core_after']}/{prepared['mean_stamina_after']} |")
+          print("\\n### Counterfactual physics (same preparation, same departure, same storm)")
+          for variant,bylen in r["by_world_distance"].items():
+              for length,block in bylen.items():
+                  a=block["arms"]
+                  print(f"{variant}/{length}: dry-all={a['prepared_all']['mean_total_minutes']}min, "
+                        f"heat-only={a['prepared_heat_only']['mean_total_minutes']}min, "
+                        f"no-pace={a['prepared_no_movement']['mean_total_minutes']}min, "
+                        f"no-stamina={a['prepared_no_stamina']['mean_stamina_after']} stamina, "
+                        f"no-thermal={a['prepared_no_thermal']['mean_core_after']} core")
+          print("\\nObserved wins/trade-offs:",r["observations"])
+          print("Checks:",r["checks"])
+          print("No one perfect policy is required; the actor's fixed 2h belief is an experimental weakness.")
+          assert all(v == 0 for v in r["checks"].values()),r["checks"]
+          PY
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: clothing-payoff-7-arm-json
+          path: research-results/
